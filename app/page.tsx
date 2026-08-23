@@ -422,16 +422,22 @@ export default function Home() {
   }
 
   const navigation: { id: View; label: string; icon: string }[] = [
-    { id: "overview", label: "總覽", icon: "⌂" },
-    { id: "records", label: "對局紀錄", icon: "▦" },
-    { id: "players", label: "成員統計", icon: "◎" },
-    { id: "fund", label: "麻將基金", icon: "$" },
+    { id: "overview", label: "總覽", icon: "發" },
+    { id: "records", label: "對局紀錄", icon: "萬" },
+    { id: "players", label: "成員統計", icon: "筒" },
+    { id: "fund", label: "麻將基金", icon: "中" },
   ];
   const viewHeading = {
     overview: { copy: "家庭戰況一目了然", title: "本季戰況" },
     records: { copy: "每一場都清清楚楚", title: "對局紀錄" },
     players: { copy: "看看誰是牌桌常勝軍", title: "成員統計" },
     fund: { copy: "輸家繳錢，旅遊花用", title: "張家麻將基金" },
+  }[view];
+  const viewTiles = {
+    overview: ["東", "發", "中"],
+    records: ["萬", "筒", "索"],
+    players: ["南", "西", "北"],
+    fund: ["發", "中", "白"],
   }[view];
 
   if (accessLoading) return <AccessLoading />;
@@ -445,6 +451,7 @@ export default function Home() {
           {navigation.map((item) => <button key={item.id} type="button" onClick={() => setView(item.id)} className={view === item.id ? "active" : ""}><i>{item.icon}</i><span>{item.label}</span></button>)}
         </nav>
         <div className="sidebar-foot">
+          <div className="sidebar-tiles" aria-hidden="true"><span>東</span><span>南</span><span>西</span><span>北</span></div>
           <button type="button" onClick={() => setPlayersOpen(true)}>管理成員 <span>→</span></button>
           <button type="button" onClick={switchRoom}>更換通關碼 <span>↗</span></button>
           <p>家人的共用麻將帳本</p>
@@ -463,7 +470,7 @@ export default function Home() {
 
           <div className="page-heading">
             <div><p>{viewHeading.copy}</p><h1>{viewHeading.title}</h1></div>
-            {(view === "overview" || view === "players") && <label className="player-filter">查看誰<select value={focusPlayer} onChange={(event) => setFocusPlayer(event.target.value)}><option value="all">全體成員</option>{data.players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label>}
+            <div className="heading-actions"><div className="heading-tiles" aria-hidden="true">{viewTiles.map((tile, index) => <span className={`tile-${index + 1}`} key={`${view}-${tile}`}>{tile}</span>)}</div>{(view === "overview" || view === "players") && <label className="player-filter">查看誰<select value={focusPlayer} onChange={(event) => setFocusPlayer(event.target.value)}><option value="all">全體成員</option>{data.players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label>}</div>
           </div>
 
           {loading ? <LoadingState /> : data.players.length < 4 ? (
@@ -471,10 +478,10 @@ export default function Home() {
           ) : view === "overview" ? (
             <>
               <section className={focused ? "metric-grid" : "metric-grid overview-metric-grid"} aria-label="主要統計">
-                <Metric label={focused ? `${focused.player.name} 淨輸贏` : "總對局數"} value={focused ? formatMoney(focused.net) : `${filteredSessions.length}`} unit={focused ? "" : "場"} tone={focused && focused.net < 0 ? "red" : "green"} hint={focused ? `${focused.games} 場紀錄` : `${season} · ${data.players.filter((player) => player.active).length} 位成員`} />
-                <Metric label={focused ? "勝率" : "本季手氣王"} value={focused ? percentage(focused.winRate) : leader?.player.name ?? "—"} unit="" tone="dark" hint={focused ? `贏錢 ${focused.winningGames} 場／輸錢 ${focused.losingGames} 場` : leader ? formatMoney(leader.net) : "還沒有對局"} />
-                {focused && <Metric label="平均每場" value={formatMoney(focused.average)} unit="" tone="cream" hint={`單場最佳 ${formatMoney(focused.best)}`} />}
-                {focused && <Metric label="自摸 / 放槍" value={`${focused.selfDraws} / ${focused.dealsIn}`} unit="次" tone="yellow" hint={`平均 ${decimal(focused.selfDrawsPerGame)}／${decimal(focused.dealsInPerGame)} 次`} />}
+                <Metric tile={focused ? "中" : "萬"} label={focused ? `${focused.player.name} 淨輸贏` : "總對局數"} value={focused ? formatMoney(focused.net) : `${filteredSessions.length}`} unit={focused ? "" : "場"} tone={focused && focused.net < 0 ? "red" : "green"} hint={focused ? `${focused.games} 場紀錄` : `${season} · ${data.players.filter((player) => player.active).length} 位成員`} />
+                <Metric tile="發" label={focused ? "勝率" : "本季手氣王"} value={focused ? percentage(focused.winRate) : leader?.player.name ?? "—"} unit="" tone="dark" hint={focused ? `贏錢 ${focused.winningGames} 場／輸錢 ${focused.losingGames} 場` : leader ? formatMoney(leader.net) : "還沒有對局"} />
+                {focused && <Metric tile="筒" label="平均每場" value={formatMoney(focused.average)} unit="" tone="cream" hint={`單場最佳 ${formatMoney(focused.best)}`} />}
+                {focused && <Metric tile="索" label="自摸 / 放槍" value={`${focused.selfDraws} / ${focused.dealsIn}`} unit="次" tone="yellow" hint={`平均 ${decimal(focused.selfDrawsPerGame)}／${decimal(focused.dealsInPerGame)} 次`} />}
               </section>
               {detailFacts.length > 0 && <section className="quick-stat-grid" aria-label={`${focused?.player.name ?? "成員"}詳細統計`}>
                 {detailFacts.map((fact) => <article key={fact.label}><span>{fact.label}</span><strong className={fact.tone}>{fact.value}</strong></article>)}
@@ -561,12 +568,13 @@ function AccessGate({ error, saving, onSubmit }: { error: string; saving: boolea
   </main>;
 }
 
-function Metric({ label, value, unit, tone, hint }: { label: string; value: string; unit: string; tone: string; hint: string }) {
-  return <article className={`metric-card ${tone}`}><div className="metric-label"><span>{label}</span><i>↗</i></div><div className="metric-value"><strong>{value}</strong>{unit && <span>{unit}</span>}</div><p>{hint}</p></article>;
+function Metric({ tile, label, value, unit, tone, hint }: { tile: string; label: string; value: string; unit: string; tone: string; hint: string }) {
+  return <article className={`metric-card ${tone}`}><div className="metric-label"><span>{label}</span><i>{tile}</i></div><div className="metric-value"><strong>{value}</strong>{unit && <span>{unit}</span>}</div><p>{hint}</p></article>;
 }
 
 function PanelHead({ eyebrow, title, action, onAction }: { eyebrow: string; title: string; action?: string; onAction?: () => void }) {
-  return <header className="panel-head"><div><span>{eyebrow}</span><h2>{title}</h2></div>{action && <button type="button" onClick={onAction}>{action} →</button>}</header>;
+  const tile = title.includes("排行榜") ? "萬" : title.includes("參與") ? "筒" : title.includes("最近") ? "東" : "發";
+  return <header className="panel-head"><div className="panel-title"><i aria-hidden="true">{tile}</i><div><span>{eyebrow}</span><h2>{title}</h2></div></div>{action && <button type="button" onClick={onAction}>{action} →</button>}</header>;
 }
 
 function EmptyMini({ text }: { text: string }) { return <div className="empty-mini"><span>🀄</span><p>{text}</p></div>; }
