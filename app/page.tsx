@@ -211,7 +211,8 @@ export default function Home() {
   const dealsInKing = stats.filter((item) => item.dealsIn > 0).reduce<PlayerStats | null>((best, item) => !best || item.dealsInPerGame > best.dealsInPerGame ? item : best, null);
   const selfDrawKing = stats.filter((item) => item.selfDraws > 0).reduce<PlayerStats | null>((best, item) => !best || item.selfDrawsPerGame > best.selfDrawsPerGame ? item : best, null);
   const killer = stats.filter((item) => item.grossWin > 0).reduce<PlayerStats | null>((best, item) => !best || item.averageWin > best.averageWin ? item : best, null);
-  const shareholder = stats.filter((item) => item.losingGames > 0).reduce<PlayerStats | null>((best, item) => !best || item.averageLoss > best.averageLoss ? item : best, null);
+  const comfortProvider = stats.filter((item) => item.losingGames > 0).reduce<PlayerStats | null>((best, item) => !best || item.averageLoss > best.averageLoss ? item : best, null);
+  const shareholder = stats.filter((item) => item.grossLoss > 0).reduce<PlayerStats | null>((best, item) => !best || item.grossLoss > best.grossLoss ? item : best, null);
   const brightestResult = filteredResults.filter((item) => item.amount > 0).reduce<GameResult | null>((best, item) => !best || item.amount > best.amount ? item : best, null);
   const brightestPlayer = brightestResult ? data.players.find((item) => item.id === brightestResult.playerId) : null;
   const brightestSession = brightestResult ? filteredSessions.find((item) => item.id === brightestResult.sessionId) : null;
@@ -219,7 +220,8 @@ export default function Home() {
     { title: "放槍王", mark: "槍", player: dealsInKing?.player, value: dealsInKing ? `${decimal(dealsInKing.dealsInPerGame)} 次` : "—", hint: "平均放槍數最高" },
     { title: "自摸王", mark: "摸", player: selfDrawKing?.player, value: selfDrawKing ? `${decimal(selfDrawKing.selfDrawsPerGame)} 次` : "—", hint: "平均自摸數最高" },
     { title: "殺王", mark: "殺", player: killer?.player, value: killer ? formatMoney(killer.averageWin, false) : "—", hint: "平均單場贏最多" },
-    { title: "大股東", mark: "股", player: shareholder?.player, value: shareholder ? `-$${shareholder.averageLoss.toLocaleString("zh-TW")}` : "—", hint: "平均單場輸最多" },
+    { title: "有你就舒服", mark: "舒", player: comfortProvider?.player, value: comfortProvider ? `-$${comfortProvider.averageLoss.toLocaleString("zh-TW")}` : "—", hint: "平均單場輸最多" },
+    { title: "大股東", mark: "股", player: shareholder?.player, value: shareholder ? `-$${shareholder.grossLoss.toLocaleString("zh-TW")}` : "—", hint: "輸錢總額／繳基金最多" },
     { title: "本季最耀眼", mark: "耀", player: brightestPlayer, value: brightestResult ? formatMoney(brightestResult.amount) : "—", hint: brightestSession ? `${formatDate(brightestSession.playedAt)} 單場最高` : "等待第一場勝局" },
   ];
   const maxBar = Math.max(1, ...stats.map((item) => Math.abs(item.net)));
