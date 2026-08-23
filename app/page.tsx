@@ -26,7 +26,7 @@ import {
   type Player,
 } from "./firebase";
 type SeatInput = { playerId: string; amount: string; wins: string; selfDraws: string; dealsIn: string };
-type View = "overview" | "records" | "players";
+type View = "overview" | "records" | "players" | "fund";
 type PlayerStats = {
   player: Player;
   games: number;
@@ -193,9 +193,6 @@ export default function Home() {
   }, [data.players, filteredResults, filteredSessions]);
 
   const focused = focusPlayer === "all" ? null : stats.find((item) => item.player.id === focusPlayer) ?? null;
-  const totalTurnover = filteredResults.filter((item) => item.amount > 0).reduce((sum, item) => sum + item.amount, 0);
-  const totalSelfDraws = filteredResults.reduce((sum, item) => sum + item.selfDraws, 0);
-  const totalDealsIn = filteredResults.reduce((sum, item) => sum + item.dealsIn, 0);
   const fundIncome = filteredResults.filter((item) => item.amount < 0).reduce((sum, item) => sum + Math.abs(item.amount), 0);
   const fundSpending = filteredExpenses.reduce((sum, item) => sum + item.amount, 0);
   const fundAdjustment = filteredAdjustments.reduce((sum, item) => sum + item.amount, 0);
@@ -205,8 +202,6 @@ export default function Home() {
   const allTimeFundAdjustment = data.adjustments.reduce((sum, item) => sum + item.amount, 0);
   const allTimeFundBalance = data.openingBalance + allTimeFundIncome - allTimeFundSpending + allTimeFundAdjustment;
   const totalRounds = filteredSessions.reduce((sum, item) => sum + item.rounds, 0);
-  const totalWinningRecords = stats.reduce((sum, item) => sum + item.winningGames, 0);
-  const totalLosingRecords = stats.reduce((sum, item) => sum + item.losingGames, 0);
   const leader = stats.find((item) => item.games > 0);
   const dealsInKing = stats.filter((item) => item.dealsIn > 0).reduce<PlayerStats | null>((best, item) => !best || item.dealsInPerGame > best.dealsInPerGame ? item : best, null);
   const selfDrawKing = stats.filter((item) => item.selfDraws > 0).reduce<PlayerStats | null>((best, item) => !best || item.selfDrawsPerGame > best.selfDrawsPerGame ? item : best, null);
@@ -248,14 +243,7 @@ export default function Home() {
     { label: "平均單場輸", value: focused.averageLoss ? `-$${focused.averageLoss.toLocaleString("zh-TW")}` : "$0", tone: focused.averageLoss ? "money-down" : "" },
     { label: "平均自摸數", value: `${decimal(focused.selfDrawsPerGame)} 次` },
     { label: "平均放槍數", value: `${decimal(focused.dealsInPerGame)} 次` },
-  ] : [
-    { label: "累積將數", value: `${totalRounds} 將` },
-    { label: "贏錢人次", value: `${totalWinningRecords} 次`, tone: "money-up" },
-    { label: "輸錢人次", value: `${totalLosingRecords} 次`, tone: "money-down" },
-    { label: "平均每局金流", value: formatMoney(filteredSessions.length ? Math.round(totalTurnover / filteredSessions.length) : 0, false) },
-    { label: "累積自摸", value: `${totalSelfDraws} 次` },
-    { label: "累積放槍", value: `${totalDealsIn} 次` },
-  ];
+  ] : [];
 
   const resetRecordForm = useCallback(() => {
     setEditingId(null);
@@ -438,7 +426,14 @@ export default function Home() {
     { id: "overview", label: "總覽", icon: "⌂" },
     { id: "records", label: "對局紀錄", icon: "▦" },
     { id: "players", label: "成員統計", icon: "◎" },
+    { id: "fund", label: "麻將基金", icon: "$" },
   ];
+  const viewHeading = {
+    overview: { copy: "家庭戰況一目了然", title: "本季戰況" },
+    records: { copy: "每一場都清清楚楚", title: "對局紀錄" },
+    players: { copy: "看看誰是牌桌常勝軍", title: "成員統計" },
+    fund: { copy: "輸家繳錢，旅遊花用", title: "張家麻將基金" },
+  }[view];
 
   if (accessLoading) return <AccessLoading />;
   if (!roomId) return <AccessGate error={accessError} saving={accessSaving} onSubmit={openRoom} />;
@@ -468,23 +463,23 @@ export default function Home() {
           {message && <div className="toast" role="status"><span>{message}</span><button type="button" onClick={() => setMessage("")}>×</button></div>}
 
           <div className="page-heading">
-            <div><p>{view === "overview" ? "家庭戰況一目了然" : view === "records" ? "每一場都清清楚楚" : "看看誰是牌桌常勝軍"}</p><h1>{view === "overview" ? "本季戰況" : view === "records" ? "對局紀錄" : "成員統計"}</h1></div>
-            <label className="player-filter">查看誰<select value={focusPlayer} onChange={(event) => setFocusPlayer(event.target.value)}><option value="all">全體成員</option>{data.players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label>
+            <div><p>{viewHeading.copy}</p><h1>{viewHeading.title}</h1></div>
+            {(view === "overview" || view === "players") && <label className="player-filter">查看誰<select value={focusPlayer} onChange={(event) => setFocusPlayer(event.target.value)}><option value="all">全體成員</option>{data.players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label>}
           </div>
 
           {loading ? <LoadingState /> : data.players.length < 4 ? (
             <EmptyOnboarding onOpen={() => setPlayersOpen(true)} />
           ) : view === "overview" ? (
             <>
-              <section className="metric-grid" aria-label="主要統計">
+              <section className={focused ? "metric-grid" : "metric-grid overview-metric-grid"} aria-label="主要統計">
                 <Metric label={focused ? `${focused.player.name} 淨輸贏` : "總對局數"} value={focused ? formatMoney(focused.net) : `${filteredSessions.length}`} unit={focused ? "" : "場"} tone={focused && focused.net < 0 ? "red" : "green"} hint={focused ? `${focused.games} 場紀錄` : `${season} · ${data.players.filter((player) => player.active).length} 位成員`} />
                 <Metric label={focused ? "勝率" : "本季手氣王"} value={focused ? percentage(focused.winRate) : leader?.player.name ?? "—"} unit="" tone="dark" hint={focused ? `贏錢 ${focused.winningGames} 場／輸錢 ${focused.losingGames} 場` : leader ? formatMoney(leader.net) : "還沒有對局"} />
-                <Metric label={focused ? "平均每場" : season === "全部賽季" ? "基金總收入" : "本季基金收入"} value={focused ? formatMoney(focused.average) : formatMoney(fundIncome, false)} unit="" tone="cream" hint={focused ? `單場最佳 ${formatMoney(focused.best)}` : "所有輸家繳入的金額"} />
-                <Metric label={focused ? "自摸 / 放槍" : "累積自摸數"} value={focused ? `${focused.selfDraws} / ${focused.dealsIn}` : `${totalSelfDraws}`} unit="次" tone="yellow" hint={focused ? `平均 ${decimal(focused.selfDrawsPerGame)}／${decimal(focused.dealsInPerGame)} 次` : `${totalDealsIn} 次放槍`} />
+                <Metric label={focused ? "平均每場" : "累積將數"} value={focused ? formatMoney(focused.average) : `${totalRounds}`} unit={focused ? "" : "將"} tone="cream" hint={focused ? `單場最佳 ${formatMoney(focused.best)}` : "目前統計區間"} />
+                {focused && <Metric label="自摸 / 放槍" value={`${focused.selfDraws} / ${focused.dealsIn}`} unit="次" tone="yellow" hint={`平均 ${decimal(focused.selfDrawsPerGame)}／${decimal(focused.dealsInPerGame)} 次`} />}
               </section>
-              <section className="quick-stat-grid" aria-label={focused ? `${focused.player.name}詳細統計` : "牌局詳細統計"}>
+              {detailFacts.length > 0 && <section className="quick-stat-grid" aria-label={`${focused?.player.name ?? "成員"}詳細統計`}>
                 {detailFacts.map((fact) => <article key={fact.label}><span>{fact.label}</span><strong className={fact.tone}>{fact.value}</strong></article>)}
-              </section>
+              </section>}
 
               <section className="award-panel" aria-label="牌桌風雲榜">
                 <div className="award-heading"><div><span>TABLE TITLES</span><h2>牌桌風雲榜</h2></div><p>依目前選擇的統計區間計算</p></div>
@@ -494,8 +489,6 @@ export default function Home() {
                   <b>{award.value}</b>
                 </article>)}</div>
               </section>
-
-              <FundPanel season={season} currentSeason={data.currentSeason} openingBalance={data.openingBalance} income={fundIncome} spending={fundSpending} adjustment={fundAdjustment} balance={fundBalance} allTimeBalance={allTimeFundBalance} expenses={filteredExpenses} adjustments={filteredAdjustments} onChangeSeason={() => setSeasonOpen(true)} onAddExpense={() => setExpenseOpen(true)} onOpenFundTools={() => setFundToolsOpen(true)} onDeleteExpense={removeExpense} onDeleteAdjustment={removeAdjustment} />
 
               <section className="dashboard-grid">
                 <article className="panel leaderboard-panel">
@@ -521,8 +514,10 @@ export default function Home() {
             </>
           ) : view === "records" ? (
             <RecordsView sessions={filteredSessions} results={data.results} players={data.players} onEdit={editRecord} onDelete={deleteRecord} onAdd={openNewRecord} />
-          ) : (
+          ) : view === "players" ? (
             <PlayersView stats={stats} maxBar={maxBar} onManage={() => setPlayersOpen(true)} />
+          ) : (
+            <FundPanel season={season} currentSeason={data.currentSeason} openingBalance={data.openingBalance} income={fundIncome} spending={fundSpending} adjustment={fundAdjustment} balance={fundBalance} allTimeBalance={allTimeFundBalance} expenses={filteredExpenses} adjustments={filteredAdjustments} onChangeSeason={() => setSeasonOpen(true)} onAddExpense={() => setExpenseOpen(true)} onOpenFundTools={() => setFundToolsOpen(true)} onDeleteExpense={removeExpense} onDeleteAdjustment={removeAdjustment} />
           )}
         </div>
       </section>
