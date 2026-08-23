@@ -201,7 +201,6 @@ export default function Home() {
   const allTimeFundSpending = data.expenses.reduce((sum, item) => sum + item.amount, 0);
   const allTimeFundAdjustment = data.adjustments.reduce((sum, item) => sum + item.amount, 0);
   const allTimeFundBalance = data.openingBalance + allTimeFundIncome - allTimeFundSpending + allTimeFundAdjustment;
-  const totalRounds = filteredSessions.reduce((sum, item) => sum + item.rounds, 0);
   const leader = stats.find((item) => item.games > 0);
   const dealsInKing = stats.filter((item) => item.dealsIn > 0).reduce<PlayerStats | null>((best, item) => !best || item.dealsInPerGame > best.dealsInPerGame ? item : best, null);
   const selfDrawKing = stats.filter((item) => item.selfDraws > 0).reduce<PlayerStats | null>((best, item) => !best || item.selfDrawsPerGame > best.selfDrawsPerGame ? item : best, null);
@@ -474,7 +473,7 @@ export default function Home() {
               <section className={focused ? "metric-grid" : "metric-grid overview-metric-grid"} aria-label="主要統計">
                 <Metric label={focused ? `${focused.player.name} 淨輸贏` : "總對局數"} value={focused ? formatMoney(focused.net) : `${filteredSessions.length}`} unit={focused ? "" : "場"} tone={focused && focused.net < 0 ? "red" : "green"} hint={focused ? `${focused.games} 場紀錄` : `${season} · ${data.players.filter((player) => player.active).length} 位成員`} />
                 <Metric label={focused ? "勝率" : "本季手氣王"} value={focused ? percentage(focused.winRate) : leader?.player.name ?? "—"} unit="" tone="dark" hint={focused ? `贏錢 ${focused.winningGames} 場／輸錢 ${focused.losingGames} 場` : leader ? formatMoney(leader.net) : "還沒有對局"} />
-                <Metric label={focused ? "平均每場" : "累積將數"} value={focused ? formatMoney(focused.average) : `${totalRounds}`} unit={focused ? "" : "將"} tone="cream" hint={focused ? `單場最佳 ${formatMoney(focused.best)}` : "目前統計區間"} />
+                {focused && <Metric label="平均每場" value={formatMoney(focused.average)} unit="" tone="cream" hint={`單場最佳 ${formatMoney(focused.best)}`} />}
                 {focused && <Metric label="自摸 / 放槍" value={`${focused.selfDraws} / ${focused.dealsIn}`} unit="次" tone="yellow" hint={`平均 ${decimal(focused.selfDrawsPerGame)}／${decimal(focused.dealsInPerGame)} 次`} />}
               </section>
               {detailFacts.length > 0 && <section className="quick-stat-grid" aria-label={`${focused?.player.name ?? "成員"}詳細統計`}>

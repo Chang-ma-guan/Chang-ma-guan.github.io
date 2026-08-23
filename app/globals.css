@@ -61,7 +61,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .toast button { background: none; border: 0; font-size: 20px; }
 
 .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-.overview-metric-grid { grid-template-columns: repeat(3, 1fr); }
+.overview-metric-grid { grid-template-columns: repeat(2, 1fr); }
 .metric-card { min-height: 190px; padding: 22px 22px 20px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; position: relative; }
 .metric-card::after { content: ""; width: 90px; height: 90px; position: absolute; right: -35px; bottom: -35px; border: 1px solid currentColor; border-radius: 50%; opacity: .12; }
 .metric-card.green { background: var(--green-soft); border-color: #c2ddce; }
