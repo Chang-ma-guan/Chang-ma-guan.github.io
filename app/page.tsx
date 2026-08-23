@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FocusEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   addPlayerRecord,
   createRoom,
@@ -34,10 +34,8 @@ type PlayerStats = {
   averagePerRound: number;
   best: number;
   worst: number;
-  wins: number;
   selfDraws: number;
   dealsIn: number;
-  selfDrawRate: number;
   dealsInPerGame: number;
   recentNet: number;
   streak: string;
@@ -48,7 +46,7 @@ const emptyData: LedgerData = { players: [], sessions: [], results: [] };
 
 function today() { return new Date().toISOString().slice(0, 10); }
 function freshSeats(players: Player[]): SeatInput[] {
-  return Array.from({ length: 4 }, (_, index) => ({ playerId: players.filter((player) => player.active)[index]?.id ?? "", amount: "", wins: "0", selfDraws: "0", dealsIn: "0" }));
+  return Array.from({ length: 4 }, (_, index) => ({ playerId: players.filter((player) => player.active)[index]?.id ?? "", amount: "", wins: "0", selfDraws: "", dealsIn: "" }));
 }
 function formatMoney(value: number, showPlus = true) {
   const sign = value > 0 && showPlus ? "+" : value < 0 ? "-" : "";
@@ -60,6 +58,7 @@ function formatDate(value: string) {
 }
 function percentage(value: number) { return `${Math.round(value)}%`; }
 function decimal(value: number) { return value.toFixed(1); }
+function selectNumber(event: FocusEvent<HTMLInputElement>) { event.currentTarget.select(); }
 function streakLabel(amounts: number[]) {
   if (!amounts.length) return "—";
   if (amounts[0] === 0) return "目前平手";
@@ -144,7 +143,6 @@ export default function Home() {
       const grossWin = amounts.filter((amount) => amount > 0).reduce((sum, amount) => sum + amount, 0);
       const grossLoss = Math.abs(amounts.filter((amount) => amount < 0).reduce((sum, amount) => sum + amount, 0));
       const rounds = entries.reduce((sum, item) => sum + (roundsBySession.get(item.sessionId) ?? 0), 0);
-      const wins = entries.reduce((sum, item) => sum + item.wins, 0);
       const selfDraws = entries.reduce((sum, item) => sum + item.selfDraws, 0);
       const dealsIn = entries.reduce((sum, item) => sum + item.dealsIn, 0);
       return {
@@ -162,10 +160,8 @@ export default function Home() {
         averagePerRound: rounds ? Math.round(net / rounds) : 0,
         best: amounts.length ? Math.max(...amounts) : 0,
         worst: amounts.length ? Math.min(...amounts) : 0,
-        wins,
         selfDraws,
         dealsIn,
-        selfDrawRate: wins ? (selfDraws / wins) * 100 : 0,
         dealsInPerGame: entries.length ? dealsIn / entries.length : 0,
         recentNet: orderedEntries.slice(0, 5).reduce((sum, item) => sum + item.amount, 0),
         streak: streakLabel(orderedEntries.map((item) => item.amount)),
@@ -175,7 +171,6 @@ export default function Home() {
 
   const focused = focusPlayer === "all" ? null : stats.find((item) => item.player.id === focusPlayer) ?? null;
   const totalTurnover = filteredResults.filter((item) => item.amount > 0).reduce((sum, item) => sum + item.amount, 0);
-  const totalHands = filteredResults.reduce((sum, item) => sum + item.wins, 0);
   const totalSelfDraws = filteredResults.reduce((sum, item) => sum + item.selfDraws, 0);
   const totalDealsIn = filteredResults.reduce((sum, item) => sum + item.dealsIn, 0);
   const totalRounds = filteredSessions.reduce((sum, item) => sum + item.rounds, 0);
@@ -234,7 +229,7 @@ export default function Home() {
     setRecordSeason(session.season);
     setRounds(String(session.rounds));
     setNote(session.note);
-    setSeats(rows.map((row) => ({ playerId: row.playerId, amount: String(row.amount), wins: String(row.wins), selfDraws: String(row.selfDraws), dealsIn: String(row.dealsIn) })));
+    setSeats(rows.map((row) => ({ playerId: row.playerId, amount: String(row.amount), wins: String(row.wins), selfDraws: row.selfDraws ? String(row.selfDraws) : "", dealsIn: row.dealsIn ? String(row.dealsIn) : "" })));
     setMessage("");
     setRecordOpen(true);
   }
@@ -321,10 +316,10 @@ export default function Home() {
   }
 
   function exportCsv() {
-    const header = ["日期", "賽季", "成員", "輸贏金額", "名次", "胡牌", "自摸", "放槍", "將數", "備註"];
+    const header = ["日期", "賽季", "成員", "輸贏金額", "名次", "自摸", "放槍", "將數", "備註"];
     const rows = data.sessions.flatMap((session) => data.results.filter((result) => result.sessionId === session.id).map((result) => {
       const player = data.players.find((item) => item.id === result.playerId);
-      return [session.playedAt, session.season, player?.name ?? "", result.amount, result.placement, result.wins, result.selfDraws, result.dealsIn, session.rounds, session.note];
+      return [session.playedAt, session.season, player?.name ?? "", result.amount, result.placement, result.selfDraws, result.dealsIn, session.rounds, session.note];
     }));
     const escape = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
     const csv = `\uFEFF${[header, ...rows].map((row) => row.map(escape).join(",")).join("\r\n")}`;
@@ -378,7 +373,7 @@ export default function Home() {
                 <Metric label={focused ? `${focused.player.name} 淨輸贏` : "總對局數"} value={focused ? formatMoney(focused.net) : `${filteredSessions.length}`} unit={focused ? "" : "場"} tone={focused && focused.net < 0 ? "red" : "green"} hint={focused ? `${focused.games} 場紀錄` : `${season} · ${data.players.filter((player) => player.active).length} 位成員`} />
                 <Metric label={focused ? "勝率" : "本季手氣王"} value={focused ? percentage(focused.winRate) : leader?.player.name ?? "—"} unit="" tone="dark" hint={focused ? `贏錢 ${Math.round(focused.games * focused.winRate / 100)} 場` : leader ? formatMoney(leader.net) : "還沒有對局"} />
                 <Metric label={focused ? "平均每場" : "正向金流"} value={focused ? formatMoney(focused.average) : `$${totalTurnover.toLocaleString("zh-TW")}`} unit="" tone="cream" hint={focused ? `單場最佳 ${formatMoney(focused.best)}` : "所有贏家金額加總"} />
-                <Metric label={focused ? "累積胡牌" : "累積胡牌數"} value={focused ? `${focused.wins}` : `${totalHands}`} unit="次" tone="yellow" hint={focused ? `自摸 ${focused.selfDraws} 次 · 放槍 ${focused.dealsIn} 次` : `${totalSelfDraws} 次自摸`} />
+                <Metric label={focused ? "自摸 / 放槍" : "累積自摸數"} value={focused ? `${focused.selfDraws} / ${focused.dealsIn}` : `${totalSelfDraws}`} unit="次" tone="yellow" hint={focused ? `平均每場放槍 ${decimal(focused.dealsInPerGame)} 次` : `${totalDealsIn} 次放槍`} />
               </section>
               <section className="quick-stat-grid" aria-label={focused ? `${focused.player.name}詳細統計` : "牌局詳細統計"}>
                 {detailFacts.map((fact) => <article key={fact.label}><span>{fact.label}</span><strong className={fact.tone}>{fact.value}</strong></article>)}
@@ -464,7 +459,7 @@ function EmptyMini({ text }: { text: string }) { return <div className="empty-mi
 function LoadingState() { return <div className="loading-state"><i /><i /><i /><p>正在打開帳本…</p></div>; }
 
 function EmptyOnboarding({ onOpen }: { onOpen: () => void }) {
-  return <section className="onboarding"><div className="onboarding-art"><span>東</span><span>南</span><span>西</span><span>北</span></div><p>從你的家人名單開始</p><h2>先建立至少 4 位成員</h2><p className="onboarding-copy">建立好成員後，就能記錄每場輸贏、胡牌、自摸與放槍，所有統計會自動完成。</p><button type="button" onClick={onOpen}>＋ 新增家庭成員</button></section>;
+  return <section className="onboarding"><div className="onboarding-art"><span>東</span><span>南</span><span>西</span><span>北</span></div><p>從你的家人名單開始</p><h2>先建立至少 4 位成員</h2><p className="onboarding-copy">建立好成員後，就能記錄每場輸贏、自摸與放槍，所有統計會自動完成。</p><button type="button" onClick={onOpen}>＋ 新增家庭成員</button></section>;
 }
 
 function RecentRecords({ sessions, results, players, onEdit, onDelete, onMore }: { sessions: GameSession[]; results: GameResult[]; players: Player[]; onEdit: (session: GameSession) => void; onDelete: (id: string) => void; onMore: () => void }) {
@@ -492,15 +487,14 @@ function PlayersView({ stats, maxBar, onManage }: { stats: PlayerStats[]; maxBar
     { label: "平均每將", value: (row) => formatMoney(row.averagePerRound) },
     { label: "最佳 / 最差", value: (row) => `${formatMoney(row.best)} / ${formatMoney(row.worst)}` },
     { label: "場數 / 將數", value: (row) => `${row.games} 場 / ${row.rounds} 將` },
-    { label: "胡牌 / 自摸 / 放槍", value: (row) => `${row.wins} / ${row.selfDraws} / ${row.dealsIn}` },
-    { label: "自摸率", value: (row) => percentage(row.selfDrawRate) },
+    { label: "自摸 / 放槍", value: (row) => `${row.selfDraws} / ${row.dealsIn}` },
     { label: "平均每場放槍", value: (row) => decimal(row.dealsInPerGame) },
     { label: "近五場", value: (row) => formatMoney(row.recentNet), tone: (row) => row.recentNet >= 0 ? "money-up" : "money-down" },
     { label: "目前近況", value: (row) => row.streak },
   ];
 
   return <>
-    <div className="players-view-head"><p>完整統計總贏、總輸、勝率、每場與每將平均，以及胡牌表現。</p><button type="button" onClick={onManage}>管理成員 →</button></div>
+    <div className="players-view-head"><p>完整統計總贏、總輸、勝率、每場與每將平均，以及自摸與放槍表現。</p><button type="button" onClick={onManage}>管理成員 →</button></div>
     <section className="player-card-grid">{stats.map((row, index) => <article className="player-stat-card" key={row.player.id}>
       <header><span className="player-avatar" style={{ background: row.player.color }}>{playerAvatar(row.player)}</span><div><small>RANK {String(index + 1).padStart(2, "0")}</small><h2>{row.player.name}</h2></div><strong className={row.net >= 0 ? "money-up" : "money-down"}>{formatMoney(row.net)}</strong></header>
       <div className="player-main-bar"><i className={row.net >= 0 ? "positive" : "negative"} style={{ width: `${Math.max(4, Math.abs(row.net) / maxBar * 100)}%` }} /></div>
@@ -514,8 +508,7 @@ function PlayersView({ stats, maxBar, onManage }: { stats: PlayerStats[]; maxBar
         <div><dt>平均每將</dt><dd>{formatMoney(row.averagePerRound)}</dd></div>
         <div><dt>最佳單場</dt><dd className={row.best >= 0 ? "money-up" : "money-down"}>{formatMoney(row.best)}</dd></div>
         <div><dt>最差單場</dt><dd className={row.worst >= 0 ? "money-up" : "money-down"}>{formatMoney(row.worst)}</dd></div>
-        <div><dt>胡牌 / 自摸</dt><dd>{row.wins} / {row.selfDraws}</dd></div>
-        <div><dt>自摸率</dt><dd>{percentage(row.selfDrawRate)}</dd></div>
+        <div><dt>自摸總數</dt><dd>{row.selfDraws}</dd></div>
         <div><dt>放槍 / 每場</dt><dd>{row.dealsIn} / {decimal(row.dealsInPerGame)}</dd></div>
         <div><dt>近五場</dt><dd className={row.recentNet >= 0 ? "money-up" : "money-down"}>{formatMoney(row.recentNet)}</dd></div>
         <div><dt>目前近況</dt><dd>{row.streak}</dd></div>
@@ -540,8 +533,8 @@ function RecordModal({ editing, players, seasons, playedAt, setPlayedAt, season,
     updateSeat(index, "amount", value.startsWith("-") ? value.slice(1) : `-${value}`);
   }
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><div className="modal record-modal" role="dialog" aria-modal="true" aria-labelledby="record-title"><header className="modal-head"><div><p>{editing ? "EDIT GAME" : "NEW GAME"}</p><h2 id="record-title">{editing ? "編輯對局" : "記一局"}</h2></div><button type="button" aria-label="關閉" onClick={onClose}>×</button></header><form onSubmit={onSubmit}>
-    <div className="record-basics"><label>日期<input type="date" value={playedAt} onChange={(event) => setPlayedAt(event.target.value)} required /></label><label>賽季<input list="season-options" value={season} onChange={(event) => setSeason(event.target.value)} placeholder="例如：第九季" required /><datalist id="season-options">{seasons.map((item) => <option key={item} value={item} />)}</datalist></label><label>打了幾將<input type="number" min="1" value={rounds} onChange={(event) => setRounds(event.target.value)} required /></label></div>
-    <div className="seat-table"><div className="seat-head"><span>成員</span><span>輸贏金額</span><span>胡牌</span><span>自摸</span><span>放槍</span></div>{seats.map((seat, index) => <div className="seat-row" key={index}><span className="seat-order">{index + 1}</span><label className="seat-player"><span>成員</span><select value={seat.playerId} onChange={(event) => updateSeat(index, "playerId", event.target.value)} required><option value="">選擇</option>{players.map((player) => <option key={player.id} value={player.id} disabled={!player.active || seats.some((item, seatIndex) => seatIndex !== index && item.playerId === player.id)}>{player.name}{!player.active ? "（停用）" : ""}</option>)}</select></label><div className="seat-amount seat-field"><label htmlFor={`seat-amount-${index}`}>輸贏金額</label><div className="money-input"><i>$</i><input id={`seat-amount-${index}`} type="text" inputMode="numeric" pattern="-?[0-9]*" value={seat.amount} onChange={(event) => { const value = event.target.value.trim(); if (/^-?\d*$/.test(value)) updateSeat(index, "amount", value); }} placeholder="0" required /><button className={seat.amount.startsWith("-") ? "money-sign-toggle negative" : "money-sign-toggle"} type="button" aria-label={`${players.find((player) => player.id === seat.playerId)?.name ?? `第 ${index + 1} 位`}切換金額正負號`} aria-pressed={seat.amount.startsWith("-")} onClick={() => toggleAmountSign(index)}>±</button></div></div>{(["wins", "selfDraws", "dealsIn"] as const).map((key) => <label className={`seat-stat seat-${key}`} key={key}><span>{key === "wins" ? "胡牌" : key === "selfDraws" ? "自摸" : "放槍"}</span><input type="number" inputMode="numeric" min="0" value={seat[key]} onChange={(event) => updateSeat(index, key, event.target.value)} /></label>)}</div>)}</div>
+    <div className="record-basics"><label>日期<input type="date" value={playedAt} onChange={(event) => setPlayedAt(event.target.value)} required /></label><label>賽季<input list="season-options" value={season} onChange={(event) => setSeason(event.target.value)} placeholder="例如：第九季" required /><datalist id="season-options">{seasons.map((item) => <option key={item} value={item} />)}</datalist></label><label>打了幾將<input type="number" min="1" value={rounds} onFocus={selectNumber} onChange={(event) => setRounds(event.target.value)} required /></label></div>
+    <div className="seat-table"><div className="seat-head"><span>成員</span><span>輸贏金額</span><span>自摸</span><span>放槍</span></div>{seats.map((seat, index) => <div className="seat-row" key={index}><span className="seat-order">{index + 1}</span><label className="seat-player"><span>成員</span><select value={seat.playerId} onChange={(event) => updateSeat(index, "playerId", event.target.value)} required><option value="">選擇</option>{players.map((player) => <option key={player.id} value={player.id} disabled={!player.active || seats.some((item, seatIndex) => seatIndex !== index && item.playerId === player.id)}>{player.name}{!player.active ? "（停用）" : ""}</option>)}</select></label><div className="seat-amount seat-field"><label htmlFor={`seat-amount-${index}`}>輸贏金額</label><div className="money-input"><i>$</i><input id={`seat-amount-${index}`} type="text" inputMode="numeric" pattern="-?[0-9]*" value={seat.amount} onFocus={selectNumber} onChange={(event) => { const value = event.target.value.trim(); if (/^-?\d*$/.test(value)) updateSeat(index, "amount", value); }} placeholder="0" required /><button className={seat.amount.startsWith("-") ? "money-sign-toggle negative" : "money-sign-toggle"} type="button" aria-label={`${players.find((player) => player.id === seat.playerId)?.name ?? `第 ${index + 1} 位`}切換金額正負號`} aria-pressed={seat.amount.startsWith("-")} onClick={() => toggleAmountSign(index)}>±</button></div></div>{(["selfDraws", "dealsIn"] as const).map((key) => <label className={`seat-stat seat-${key}`} key={key}><span>{key === "selfDraws" ? "自摸" : "放槍"}</span><input type="number" inputMode="numeric" min="0" value={seat[key]} onFocus={selectNumber} onChange={(event) => updateSeat(index, key, event.target.value)} placeholder="0" /></label>)}</div>)}</div>
     <div className={`balance-check ${balance === 0 ? "balanced" : "unbalanced"}`}><span>{balance === 0 ? "✓ 金額已平帳" : "！金額尚未平帳"}</span><strong>{balance > 0 ? "+" : ""}{formatMoney(balance, false)}</strong></div>
     <label className="note-input">備註（選填）<input value={note} onChange={(event) => setNote(event.target.value)} placeholder="例如：過年東風場、阿姨家" /></label>
     <footer className="modal-actions"><button type="button" onClick={onClose}>取消</button><button className="save-button" type="submit" disabled={!valid || saving}>{saving ? "儲存中…" : editing ? "儲存修改" : "存入帳本"}</button></footer>
