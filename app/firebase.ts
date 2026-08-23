@@ -18,7 +18,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 
-export type Player = { id: string; name: string; color: string; active: number; createdAt?: string };
+export type Player = { id: string; name: string; avatar: string; color: string; active: number; createdAt?: string };
 export type GameSession = { id: string; playedAt: string; season: string; rounds: number; note: string; createdAt: string };
 export type GameResult = {
   id: string;
@@ -58,6 +58,10 @@ function timestampToText(value: unknown) {
     return value.toDate().toISOString();
   }
   return typeof value === "string" ? value : "";
+}
+
+function normalizeAvatar(value: string, name: string) {
+  return Array.from(value.trim())[0] ?? Array.from(name.trim())[0] ?? "?";
 }
 
 export async function ensureGuestAuth() {
@@ -143,7 +147,7 @@ export function watchLedger(roomId: string, onData: (data: LedgerData) => void, 
     (snapshot) => {
       current.players = snapshot.docs.map((row) => {
         const value = row.data();
-        return { id: row.id, name: String(value.name ?? ""), color: String(value.color ?? "#167c5a"), active: Number(value.active ?? 1), createdAt: timestampToText(value.createdAt) };
+        return { id: row.id, name: String(value.name ?? ""), avatar: String(value.avatar ?? ""), color: String(value.color ?? "#167c5a"), active: Number(value.active ?? 1), createdAt: timestampToText(value.createdAt) };
       });
       ready.players = true;
       emit();
@@ -187,12 +191,13 @@ export function watchLedger(roomId: string, onData: (data: LedgerData) => void, 
   };
 }
 
-export async function addPlayerRecord(roomId: string, input: { name: string; color: string }) {
+export async function addPlayerRecord(roomId: string, input: { name: string; avatar: string; color: string }) {
   const name = input.name.trim();
   if (!name) throw new Error("請輸入成員名稱");
   const id = crypto.randomUUID();
   await setDoc(doc(database, "rooms", roomId, "players", id), {
     name,
+    avatar: normalizeAvatar(input.avatar, name),
     color: input.color,
     active: 1,
     createdAt: serverTimestamp(),
@@ -204,6 +209,7 @@ export async function updatePlayerRecord(roomId: string, player: Player) {
   if (!name) throw new Error("請輸入成員名稱");
   await updateDoc(doc(database, "rooms", roomId, "players", player.id), {
     name,
+    avatar: normalizeAvatar(player.avatar, name),
     color: player.color,
     active: player.active ? 1 : 0,
   });

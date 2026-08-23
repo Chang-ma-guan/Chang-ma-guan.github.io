@@ -36,6 +36,9 @@ function formatDate(value: string) {
   return `${year}.${month}.${day}`;
 }
 function percentage(value: number) { return `${Math.round(value)}%`; }
+function playerAvatar(player: Pick<Player, "name" | "avatar">) {
+  return Array.from(player.avatar.trim())[0] ?? Array.from(player.name.trim())[0] ?? "?";
+}
 
 export default function Home() {
   const [data, setData] = useState<LedgerData>(emptyData);
@@ -58,6 +61,7 @@ export default function Home() {
   const [note, setNote] = useState("");
   const [seats, setSeats] = useState<SeatInput[]>(freshSeats([]));
   const [newPlayer, setNewPlayer] = useState("");
+  const [newAvatar, setNewAvatar] = useState("");
   const [newColor, setNewColor] = useState(playerColors[0]);
 
   useEffect(() => {
@@ -205,8 +209,9 @@ export default function Home() {
     event.preventDefault();
     if (!newPlayer.trim() || !roomId) return;
     try {
-      await addPlayerRecord(roomId, { name: newPlayer, color: newColor });
+      await addPlayerRecord(roomId, { name: newPlayer, avatar: newAvatar, color: newColor });
       setNewPlayer("");
+      setNewAvatar("");
       setNewColor(playerColors[(data.players.length + 1) % playerColors.length]);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "新增失敗");
@@ -299,7 +304,7 @@ export default function Home() {
                   <div className="leaderboard">
                     {stats.length ? stats.slice(0, 8).map((row, index) => <div className="rank-row" key={row.player.id}>
                       <span className={`rank-number rank-${index + 1}`}>{String(index + 1).padStart(2, "0")}</span>
-                      <span className="player-dot" style={{ background: row.player.color }}>{row.player.name.slice(0, 1)}</span>
+                      <span className="player-dot" style={{ background: row.player.color }}>{playerAvatar(row.player)}</span>
                       <div className="rank-name"><strong>{row.player.name}</strong><small>{row.games} 場 · 勝率 {percentage(row.winRate)}</small></div>
                       <div className="rank-bar"><span className={row.net >= 0 ? "positive" : "negative"} style={{ width: `${Math.max(5, Math.abs(row.net) / maxBar * 100)}%` }} /></div>
                       <strong className={row.net >= 0 ? "money-up" : "money-down"}>{formatMoney(row.net)}</strong>
@@ -326,7 +331,7 @@ export default function Home() {
       <nav className="mobile-nav" aria-label="手機選單">{navigation.map((item) => <button key={item.id} type="button" onClick={() => setView(item.id)} className={view === item.id ? "active" : ""}><i>{item.icon}</i><span>{item.label}</span></button>)}</nav>
 
       {recordOpen && <RecordModal editing={Boolean(editingId)} players={data.players} seasons={seasons} playedAt={playedAt} setPlayedAt={setPlayedAt} season={recordSeason} setSeason={setRecordSeason} rounds={rounds} setRounds={setRounds} note={note} setNote={setNote} seats={seats} setSeats={setSeats} balance={balance} valid={recordValid} saving={saving} onClose={() => setRecordOpen(false)} onSubmit={submitRecord} />}
-      {playersOpen && <PlayersModal players={data.players} newPlayer={newPlayer} setNewPlayer={setNewPlayer} newColor={newColor} setNewColor={setNewColor} onAdd={addPlayer} onUpdate={updatePlayer} onRemove={removePlayer} onClose={() => { setPlayersOpen(false); setMessage(""); }} setData={setData} />}
+      {playersOpen && <PlayersModal players={data.players} newPlayer={newPlayer} setNewPlayer={setNewPlayer} newAvatar={newAvatar} setNewAvatar={setNewAvatar} newColor={newColor} setNewColor={setNewColor} onAdd={addPlayer} onUpdate={updatePlayer} onRemove={removePlayer} onClose={() => { setPlayersOpen(false); setMessage(""); }} setData={setData} />}
     </main>
   );
 }
@@ -392,7 +397,7 @@ function RecordTable({ sessions, results, players, onEdit, onDelete }: { session
 }
 
 function PlayersView({ stats, maxBar, onManage }: { stats: { player: Player; games: number; net: number; winRate: number; average: number; best: number; wins: number; selfDraws: number; dealsIn: number }[]; maxBar: number; onManage: () => void }) {
-  return <><div className="players-view-head"><p>依淨輸贏排序，自動統計每位成員的勝率與牌桌表現。</p><button type="button" onClick={onManage}>管理成員 →</button></div><section className="player-card-grid">{stats.map((row, index) => <article className="player-stat-card" key={row.player.id}><header><span className="player-avatar" style={{ background: row.player.color }}>{row.player.name.slice(0, 1)}</span><div><small>RANK {String(index + 1).padStart(2, "0")}</small><h2>{row.player.name}</h2></div><strong className={row.net >= 0 ? "money-up" : "money-down"}>{formatMoney(row.net)}</strong></header><div className="player-main-bar"><i className={row.net >= 0 ? "positive" : "negative"} style={{ width: `${Math.max(4, Math.abs(row.net) / maxBar * 100)}%` }} /></div><dl><div><dt>參戰</dt><dd>{row.games} 場</dd></div><div><dt>勝率</dt><dd>{percentage(row.winRate)}</dd></div><div><dt>平均</dt><dd>{formatMoney(row.average)}</dd></div><div><dt>最佳</dt><dd>{formatMoney(row.best)}</dd></div><div><dt>胡牌</dt><dd>{row.wins} 次</dd></div><div><dt>自摸 / 放槍</dt><dd>{row.selfDraws} / {row.dealsIn}</dd></div></dl></article>)}{!stats.length && <EmptyMini text="新增對局後會顯示成員統計。" />}</section></>;
+  return <><div className="players-view-head"><p>依淨輸贏排序，自動統計每位成員的勝率與牌桌表現。</p><button type="button" onClick={onManage}>管理成員 →</button></div><section className="player-card-grid">{stats.map((row, index) => <article className="player-stat-card" key={row.player.id}><header><span className="player-avatar" style={{ background: row.player.color }}>{playerAvatar(row.player)}</span><div><small>RANK {String(index + 1).padStart(2, "0")}</small><h2>{row.player.name}</h2></div><strong className={row.net >= 0 ? "money-up" : "money-down"}>{formatMoney(row.net)}</strong></header><div className="player-main-bar"><i className={row.net >= 0 ? "positive" : "negative"} style={{ width: `${Math.max(4, Math.abs(row.net) / maxBar * 100)}%` }} /></div><dl><div><dt>參戰</dt><dd>{row.games} 場</dd></div><div><dt>勝率</dt><dd>{percentage(row.winRate)}</dd></div><div><dt>平均</dt><dd>{formatMoney(row.average)}</dd></div><div><dt>最佳</dt><dd>{formatMoney(row.best)}</dd></div><div><dt>胡牌</dt><dd>{row.wins} 次</dd></div><div><dt>自摸 / 放槍</dt><dd>{row.selfDraws} / {row.dealsIn}</dd></div></dl></article>)}{!stats.length && <EmptyMini text="新增對局後會顯示成員統計。" />}</section></>;
 }
 
 function RecordModal({ editing, players, seasons, playedAt, setPlayedAt, season, setSeason, rounds, setRounds, note, setNote, seats, setSeats, balance, valid, saving, onClose, onSubmit }: {
@@ -408,9 +413,9 @@ function RecordModal({ editing, players, seasons, playedAt, setPlayedAt, season,
   </form></div></div>;
 }
 
-function PlayersModal({ players, newPlayer, setNewPlayer, newColor, setNewColor, onAdd, onUpdate, onRemove, onClose, setData }: {
-  players: Player[]; newPlayer: string; setNewPlayer: (value: string) => void; newColor: string; setNewColor: (value: string) => void; onAdd: (event: FormEvent) => void; onUpdate: (player: Player) => void; onRemove: (player: Player) => void; onClose: () => void; setData: React.Dispatch<React.SetStateAction<LedgerData>>;
+function PlayersModal({ players, newPlayer, setNewPlayer, newAvatar, setNewAvatar, newColor, setNewColor, onAdd, onUpdate, onRemove, onClose, setData }: {
+  players: Player[]; newPlayer: string; setNewPlayer: (value: string) => void; newAvatar: string; setNewAvatar: (value: string) => void; newColor: string; setNewColor: (value: string) => void; onAdd: (event: FormEvent) => void; onUpdate: (player: Player) => void; onRemove: (player: Player) => void; onClose: () => void; setData: React.Dispatch<React.SetStateAction<LedgerData>>;
 }) {
   function patchLocal(id: string, patch: Partial<Player>) { setData((current) => ({ ...current, players: current.players.map((player) => player.id === id ? { ...player, ...patch } : player) })); }
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><div className="modal players-modal" role="dialog" aria-modal="true" aria-labelledby="players-title"><header className="modal-head"><div><p>FAMILY MEMBERS</p><h2 id="players-title">管理成員</h2></div><button type="button" aria-label="關閉" onClick={onClose}>×</button></header><form className="new-player-form" onSubmit={onAdd}><label>新增成員<input value={newPlayer} onChange={(event) => setNewPlayer(event.target.value)} placeholder="輸入名字或暱稱" maxLength={12} /></label><label className="color-field">代表色<input type="color" value={newColor} onChange={(event) => setNewColor(event.target.value)} /></label><button type="submit">＋ 加入</button></form><div className="player-edit-list">{players.map((player) => <div key={player.id} className={!player.active ? "inactive" : ""}><input className="inline-color" type="color" value={player.color} onChange={(event) => patchLocal(player.id, { color: event.target.value })} aria-label={`${player.name}代表色`} /><input className="inline-name" value={player.name} onChange={(event) => patchLocal(player.id, { name: event.target.value })} /><span>{player.active ? "使用中" : "已停用"}</span><button type="button" onClick={() => onUpdate(player)}>儲存</button><button type="button" className="remove-player" onClick={() => onRemove(player)}>{player.active ? "移除" : "刪除"}</button></div>)}</div><footer className="modal-actions"><p>已有對局紀錄的成員，移除後會保留過去統計。</p><button className="save-button" type="button" onClick={onClose}>完成</button></footer></div></div>;
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><div className="modal players-modal" role="dialog" aria-modal="true" aria-labelledby="players-title"><header className="modal-head"><div><p>FAMILY MEMBERS</p><h2 id="players-title">管理成員</h2></div><button type="button" aria-label="關閉" onClick={onClose}>×</button></header><form className="new-player-form" onSubmit={onAdd}><label>新增成員<input value={newPlayer} onChange={(event) => setNewPlayer(event.target.value)} placeholder="輸入名字或暱稱" maxLength={12} /></label><label className="avatar-field">代表字<input value={newAvatar} onChange={(event) => setNewAvatar(Array.from(event.target.value)[0] ?? "")} placeholder={Array.from(newPlayer.trim())[0] ?? "字"} maxLength={1} aria-label="新成員代表字" /></label><label className="color-field">代表色<input type="color" value={newColor} onChange={(event) => setNewColor(event.target.value)} /></label><button type="submit">＋ 加入</button></form><div className="player-edit-hint">點圓圈可修改顯示的代表字</div><div className="player-edit-list">{players.map((player) => <div key={player.id} className={!player.active ? "inactive" : ""}><input className="inline-avatar" style={{ background: player.color }} value={player.avatar} onChange={(event) => patchLocal(player.id, { avatar: Array.from(event.target.value)[0] ?? "" })} placeholder={Array.from(player.name.trim())[0] ?? "?"} maxLength={1} aria-label={`${player.name}代表字`} /><input className="inline-color" type="color" value={player.color} onChange={(event) => patchLocal(player.id, { color: event.target.value })} aria-label={`${player.name}代表色`} /><input className="inline-name" value={player.name} onChange={(event) => patchLocal(player.id, { name: event.target.value })} aria-label={`${player.name}名稱`} /><span>{player.active ? "使用中" : "已停用"}</span><button type="button" onClick={() => onUpdate(player)}>儲存</button><button type="button" className="remove-player" onClick={() => onRemove(player)}>{player.active ? "移除" : "刪除"}</button></div>)}</div><footer className="modal-actions"><p>已有對局紀錄的成員，移除後會保留過去統計。</p><button className="save-button" type="button" onClick={onClose}>完成</button></footer></div></div>;
 }
