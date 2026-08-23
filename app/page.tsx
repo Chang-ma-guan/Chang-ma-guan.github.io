@@ -1,14 +1,22 @@
-"use client";
-
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-
-type Player = { id: string; name: string; color: string; active: number; createdAt?: string };
-type GameSession = { id: string; playedAt: string; season: string; rounds: number; note: string; createdAt: string };
-type GameResult = {
-  id: string; sessionId: string; playerId: string; amount: number; placement: number;
-  wins: number; selfDraws: number; dealsIn: number;
-};
-type LedgerData = { players: Player[]; sessions: GameSession[]; results: GameResult[] };
+import {
+  addPlayerRecord,
+  createRoom,
+  deleteGameRecord,
+  ensureGuestAuth,
+  enterRoom,
+  forgetSavedRoom,
+  getSavedRoomId,
+  removePlayerRecord,
+  restoreRoom,
+  saveGameRecord,
+  updatePlayerRecord,
+  watchLedger,
+  type GameResult,
+  type GameSession,
+  type LedgerData,
+  type Player,
+} from "./firebase";
 type SeatInput = { playerId: string; amount: string; wins: string; selfDraws: string; dealsIn: string };
 type View = "overview" | "records" | "players";
 
@@ -20,8 +28,8 @@ function freshSeats(players: Player[]): SeatInput[] {
   return Array.from({ length: 4 }, (_, index) => ({ playerId: players.filter((player) => player.active)[index]?.id ?? "", amount: "", wins: "0", selfDraws: "0", dealsIn: "0" }));
 }
 function formatMoney(value: number, showPlus = true) {
-  const sign = value > 0 && showPlus ? "+" : "";
-  return `${sign}$${Math.abs(value).toLocaleString("zh-TW")}`.replace("$-", "-$");
+  const sign = value > 0 && showPlus ? "+" : value < 0 ? "-" : "";
+  return `${sign}$${Math.abs(value).toLocaleString("zh-TW")}`;
 }
 function formatDate(value: string) {
   const [year, month, day] = value.split("-");
@@ -32,6 +40,10 @@ function percentage(value: number) { return `${Math.round(value)}%`; }
 export default function Home() {
   const [data, setData] = useState<LedgerData>(emptyData);
   const [loading, setLoading] = useState(true);
+  const [accessLoading, setAccessLoading] = useState(true);
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [accessError, setAccessError] = useState("");
+  const [accessSaving, setAccessSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [view, setView] = useState<View>("overview");
   const [season, setSeason] = useState("全部賽季");
@@ -48,21 +60,31 @@ export default function Home() {
   const [newPlayer, setNewPlayer] = useState("");
   const [newColor, setNewColor] = useState(playerColors[0]);
 
-  const loadData = useCallback(async () => {
-    try {
-      const response = await fetch("/api/data", { cache: "no-store" });
-      const payload = (await response.json()) as LedgerData & { error?: string };
-      if (!response.ok) throw new Error(payload.error || "讀取資料失敗");
-      setData(payload);
-      setMessage("");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "讀取資料失敗");
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    let alive = true;
+    void ensureGuestAuth().then(async () => {
+      const saved = getSavedRoomId();
+      const restored = saved ? await restoreRoom(saved) : null;
+      if (alive) setRoomId(restored);
+    }).catch((error) => {
+      if (alive) setAccessError(error instanceof Error ? error.message : "連線失敗，請稍後再試");
+    }).finally(() => {
+      if (alive) setAccessLoading(false);
+    });
+    return () => { alive = false; };
   }, []);
 
-  useEffect(() => { void loadData(); }, [loadData]);
+  useEffect(() => {
+    if (!roomId) return;
+    return watchLedger(roomId, (next) => {
+      setData(next);
+      setLoading(false);
+      setMessage("");
+    }, (error) => {
+      setLoading(false);
+      setMessage(error);
+    });
+  }, [roomId]);
 
   const seasons = useMemo(() => Array.from(new Set(data.sessions.map((item) => item.season))), [data.sessions]);
   const filteredSessions = useMemo(() => data.sessions.filter((item) => season === "全部賽季" || item.season === season), [data.sessions, season]);
@@ -135,19 +157,33 @@ export default function Home() {
   const balance = seats.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const recordValid = seats.length === 4 && seats.every((item) => item.playerId && item.amount !== "") && new Set(seats.map((item) => item.playerId)).size === 4 && balance === 0;
 
+  async function openRoom(code: string, creating: boolean) {
+    setAccessSaving(true);
+    setAccessError("");
+    try {
+      const nextRoom = creating ? await createRoom(code) : await enterRoom(code);
+      setRoomId(nextRoom);
+      setLoading(true);
+    } catch (error) {
+      setAccessError(error instanceof Error ? error.message : "無法進入張麻館");
+    } finally {
+      setAccessSaving(false);
+    }
+  }
+
+  function switchRoom() {
+    forgetSavedRoom();
+    setRoomId(null);
+    setData(emptyData);
+    setAccessError("");
+  }
+
   async function submitRecord(event: FormEvent) {
     event.preventDefault();
-    if (!recordValid) return;
+    if (!recordValid || !roomId) return;
     setSaving(true);
     try {
-      const response = await fetch("/api/sessions", {
-        method: editingId ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: editingId, playedAt, season: recordSeason, rounds: Number(rounds), note, results: seats.map((seat) => ({ ...seat, amount: Number(seat.amount), wins: Number(seat.wins), selfDraws: Number(seat.selfDraws), dealsIn: Number(seat.dealsIn) })) }),
-      });
-      const payload = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(payload.error || "儲存失敗");
-      await loadData();
+      await saveGameRecord(roomId, { id: editingId, playedAt, season: recordSeason, rounds: Number(rounds), note, results: seats.map((seat) => ({ ...seat, amount: Number(seat.amount), wins: Number(seat.wins), selfDraws: Number(seat.selfDraws), dealsIn: Number(seat.dealsIn) })) });
       setRecordOpen(false);
       setMessage(editingId ? "紀錄已更新。" : "新對局已記下來。");
     } catch (error) {
@@ -156,31 +192,44 @@ export default function Home() {
   }
 
   async function deleteRecord(id: string) {
-    if (!window.confirm("確定要刪除這筆對局嗎？刪除後無法復原。")) return;
-    const response = await fetch(`/api/sessions?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (response.ok) { await loadData(); setMessage("紀錄已刪除。"); }
+    if (!roomId || !window.confirm("確定要刪除這筆對局嗎？刪除後無法復原。")) return;
+    try {
+      await deleteGameRecord(roomId, id);
+      setMessage("紀錄已刪除。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "刪除失敗");
+    }
   }
 
   async function addPlayer(event: FormEvent) {
     event.preventDefault();
-    if (!newPlayer.trim()) return;
-    const response = await fetch("/api/players", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newPlayer, color: newColor }) });
-    const payload = (await response.json()) as { error?: string };
-    if (!response.ok) { setMessage(payload.error || "新增失敗"); return; }
-    setNewPlayer("");
-    setNewColor(playerColors[(data.players.length + 1) % playerColors.length]);
-    await loadData();
+    if (!newPlayer.trim() || !roomId) return;
+    try {
+      await addPlayerRecord(roomId, { name: newPlayer, color: newColor });
+      setNewPlayer("");
+      setNewColor(playerColors[(data.players.length + 1) % playerColors.length]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "新增失敗");
+    }
   }
 
   async function updatePlayer(player: Player) {
-    const response = await fetch("/api/players", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: player.id, name: player.name, color: player.color, active: Boolean(player.active) }) });
-    if (response.ok) { await loadData(); setMessage("成員資料已更新。"); }
+    if (!roomId) return;
+    try {
+      await updatePlayerRecord(roomId, player);
+      setMessage("成員資料已更新。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "更新失敗");
+    }
   }
 
   async function removePlayer(player: Player) {
-    if (!window.confirm(`確定要移除「${player.name}」嗎？已有紀錄的成員會改為停用，不會影響過去統計。`)) return;
-    const response = await fetch(`/api/players?id=${encodeURIComponent(player.id)}`, { method: "DELETE" });
-    if (response.ok) await loadData();
+    if (!roomId || !window.confirm(`確定要移除「${player.name}」嗎？已有紀錄的成員會改為停用，不會影響過去統計。`)) return;
+    try {
+      await removePlayerRecord(roomId, player);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "移除失敗");
+    }
   }
 
   function exportCsv() {
@@ -201,6 +250,9 @@ export default function Home() {
     { id: "players", label: "成員統計", icon: "◎" },
   ];
 
+  if (accessLoading) return <AccessLoading />;
+  if (!roomId) return <AccessGate error={accessError} saving={accessSaving} onSubmit={openRoom} />;
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -210,6 +262,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-foot">
           <button type="button" onClick={() => setPlayersOpen(true)}>管理成員 <span>→</span></button>
+          <button type="button" onClick={switchRoom}>更換通關碼 <span>↗</span></button>
           <p>家人的共用麻將帳本</p>
         </div>
       </aside>
@@ -218,7 +271,7 @@ export default function Home() {
         <header className="topbar">
           <div className="mobile-brand"><span>張</span><strong>張麻館</strong></div>
           <label className="season-select"><span>統計區間</span><select value={season} onChange={(event) => setSeason(event.target.value)}><option>全部賽季</option>{seasons.map((item) => <option key={item}>{item}</option>)}</select></label>
-          <div className="top-actions"><button className="export-button" type="button" onClick={exportCsv} disabled={!data.sessions.length}>↓ 匯出 Excel</button><button className="add-button" type="button" onClick={openNewRecord}><span>＋</span> 記一局</button></div>
+          <div className="top-actions"><button className="room-button" type="button" onClick={switchRoom}>換館</button><button className="export-button" type="button" onClick={exportCsv} disabled={!data.sessions.length}>↓ 匯出 Excel</button><button className="add-button" type="button" onClick={openNewRecord}><span>＋</span> 記一局</button></div>
         </header>
 
         <div className="content">
@@ -278,6 +331,35 @@ export default function Home() {
   );
 }
 
+function AccessLoading() {
+  return <main className="access-shell"><div className="access-card loading-access"><div className="brand-tile">張</div><p>正在連接張麻館…</p></div></main>;
+}
+
+function AccessGate({ error, saving, onSubmit }: { error: string; saving: boolean; onSubmit: (code: string, creating: boolean) => Promise<void> }) {
+  const [code, setCode] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    void onSubmit(code, creating);
+  }
+
+  return <main className="access-shell">
+    <section className="access-card">
+      <div className="access-brand"><div className="brand-tile">張</div><div><p>FAMILY MAHJONG</p><h1>張麻館</h1></div></div>
+      <div className="mahjong-winds" aria-hidden="true"><span>東</span><span>南</span><span>西</span><span>北</span></div>
+      <div className="access-copy"><p>{creating ? "第一次開館" : "家人專用入口"}</p><h2>{creating ? "設定一組家庭通關碼" : "輸入家庭通關碼"}</h2><span>{creating ? "至少 8 個字元，請記下來並只分享給家人。" : "同一台手機成功進入後，下次不必重新輸入。"}</span></div>
+      <form className="access-form" onSubmit={submit}>
+        <label>家庭通關碼<input type="password" value={code} onChange={(event) => setCode(event.target.value)} minLength={8} autoComplete={creating ? "new-password" : "current-password"} placeholder="至少 8 個字元" required /></label>
+        {error && <p className="access-error" role="alert">{error}</p>}
+        <button className="access-primary" type="submit" disabled={saving || code.trim().length < 8}>{saving ? "連線中…" : creating ? "建立張麻館" : "進入張麻館"}</button>
+      </form>
+      <button className="access-switch" type="button" onClick={() => setCreating((value) => !value)}>{creating ? "已經建立過？回到登入" : "第一次使用？建立張麻館"}</button>
+      <p className="access-note">通關碼不會被儲存；資料使用張麻館專屬的 Firebase 免費資料庫。</p>
+    </section>
+  </main>;
+}
+
 function Metric({ label, value, unit, tone, hint }: { label: string; value: string; unit: string; tone: string; hint: string }) {
   return <article className={`metric-card ${tone}`}><div className="metric-label"><span>{label}</span><i>↗</i></div><div className="metric-value"><strong>{value}</strong>{unit && <span>{unit}</span>}</div><p>{hint}</p></article>;
 }
@@ -309,11 +391,9 @@ function RecordTable({ sessions, results, players, onEdit, onDelete }: { session
   })}</tbody></table></div>;
 }
 
-function PlayersView({ stats, maxBar, onManage }: { stats: ReturnType<typeof makeStatsPlaceholder>[] | { player: Player; games: number; net: number; winRate: number; average: number; best: number; wins: number; selfDraws: number; dealsIn: number }[]; maxBar: number; onManage: () => void }) {
+function PlayersView({ stats, maxBar, onManage }: { stats: { player: Player; games: number; net: number; winRate: number; average: number; best: number; wins: number; selfDraws: number; dealsIn: number }[]; maxBar: number; onManage: () => void }) {
   return <><div className="players-view-head"><p>依淨輸贏排序，自動統計每位成員的勝率與牌桌表現。</p><button type="button" onClick={onManage}>管理成員 →</button></div><section className="player-card-grid">{stats.map((row, index) => <article className="player-stat-card" key={row.player.id}><header><span className="player-avatar" style={{ background: row.player.color }}>{row.player.name.slice(0, 1)}</span><div><small>RANK {String(index + 1).padStart(2, "0")}</small><h2>{row.player.name}</h2></div><strong className={row.net >= 0 ? "money-up" : "money-down"}>{formatMoney(row.net)}</strong></header><div className="player-main-bar"><i className={row.net >= 0 ? "positive" : "negative"} style={{ width: `${Math.max(4, Math.abs(row.net) / maxBar * 100)}%` }} /></div><dl><div><dt>參戰</dt><dd>{row.games} 場</dd></div><div><dt>勝率</dt><dd>{percentage(row.winRate)}</dd></div><div><dt>平均</dt><dd>{formatMoney(row.average)}</dd></div><div><dt>最佳</dt><dd>{formatMoney(row.best)}</dd></div><div><dt>胡牌</dt><dd>{row.wins} 次</dd></div><div><dt>自摸 / 放槍</dt><dd>{row.selfDraws} / {row.dealsIn}</dd></div></dl></article>)}{!stats.length && <EmptyMini text="新增對局後會顯示成員統計。" />}</section></>;
 }
-
-function makeStatsPlaceholder() { return { player: { id: "", name: "", color: "", active: 1 }, games: 0, net: 0, winRate: 0, average: 0, best: 0, wins: 0, selfDraws: 0, dealsIn: 0 }; }
 
 function RecordModal({ editing, players, seasons, playedAt, setPlayedAt, season, setSeason, rounds, setRounds, note, setNote, seats, setSeats, balance, valid, saving, onClose, onSubmit }: {
   editing: boolean; players: Player[]; seasons: string[]; playedAt: string; setPlayedAt: (value: string) => void; season: string; setSeason: (value: string) => void; rounds: string; setRounds: (value: string) => void; note: string; setNote: (value: string) => void; seats: SeatInput[]; setSeats: (value: SeatInput[]) => void; balance: number; valid: boolean; saving: boolean; onClose: () => void; onSubmit: (event: FormEvent) => void;

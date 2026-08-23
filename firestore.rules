@@ -1,0 +1,69 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function validRoom(roomId) {
+      return roomId.matches('^[a-f0-9]{64}$');
+    }
+
+    match /rooms/{roomId} {
+      allow get: if signedIn() && validRoom(roomId);
+      allow list: if false;
+      allow create: if signedIn()
+        && validRoom(roomId)
+        && request.resource.data.keys().hasOnly(['name', 'createdAt', 'version'])
+        && request.resource.data.name == '張麻館'
+        && request.resource.data.version == 1;
+      allow update, delete: if false;
+
+      match /players/{playerId} {
+        allow read, delete: if signedIn() && validRoom(roomId);
+        allow create, update: if signedIn()
+          && validRoom(roomId)
+          && request.resource.data.keys().hasOnly(['name', 'color', 'active', 'createdAt'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 12
+          && request.resource.data.color is string
+          && request.resource.data.color.matches('^#[0-9A-Fa-f]{6}$')
+          && request.resource.data.active in [0, 1];
+      }
+
+      match /sessions/{sessionId} {
+        allow read, delete: if signedIn() && validRoom(roomId);
+        allow create, update: if signedIn()
+          && validRoom(roomId)
+          && request.resource.data.keys().hasOnly(['playedAt', 'season', 'rounds', 'note', 'createdAt'])
+          && request.resource.data.playedAt is string
+          && request.resource.data.season is string
+          && request.resource.data.season.size() > 0
+          && request.resource.data.rounds is int
+          && request.resource.data.rounds >= 1
+          && request.resource.data.note is string;
+      }
+
+      match /results/{resultId} {
+        allow read, delete: if signedIn() && validRoom(roomId);
+        allow create, update: if signedIn()
+          && validRoom(roomId)
+          && request.resource.data.keys().hasOnly(['sessionId', 'playerId', 'amount', 'placement', 'wins', 'selfDraws', 'dealsIn'])
+          && request.resource.data.sessionId is string
+          && request.resource.data.playerId is string
+          && request.resource.data.amount is int
+          && request.resource.data.placement is int
+          && request.resource.data.placement >= 1
+          && request.resource.data.placement <= 4
+          && request.resource.data.wins is int
+          && request.resource.data.wins >= 0
+          && request.resource.data.selfDraws is int
+          && request.resource.data.selfDraws >= 0
+          && request.resource.data.dealsIn is int
+          && request.resource.data.dealsIn >= 0;
+      }
+    }
+  }
+}

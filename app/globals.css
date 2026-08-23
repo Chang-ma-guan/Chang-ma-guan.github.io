@@ -1,5 +1,3 @@
-@import "tailwindcss";
-
 :root {
   --ink: #17241e;
   --muted: #69776f;
@@ -47,8 +45,9 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .season-select { display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .1em; }
 .season-select select, .player-filter select { min-width: 150px; padding: 10px 12px; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 4px; font-size: 13px; font-weight: 700; }
 .top-actions { display: flex; gap: 10px; }
-.export-button, .add-button { height: 43px; padding: 0 18px; border: 1px solid var(--line); border-radius: 5px; background: white; font-size: 13px; font-weight: 800; }
+.export-button, .add-button, .room-button { height: 43px; padding: 0 18px; border: 1px solid var(--line); border-radius: 5px; background: white; font-size: 13px; font-weight: 800; }
 .export-button:hover { border-color: var(--green); color: var(--green); }
+.room-button { display: none; }
 .add-button { display: flex; align-items: center; gap: 9px; color: white; background: var(--green); border-color: var(--green); box-shadow: 3px 3px 0 #0b3a2c; }
 .add-button:hover { background: #106c4d; transform: translate(1px,1px); box-shadow: 2px 2px 0 #0b3a2c; }
 .add-button span { color: var(--yellow); font-size: 18px; }
@@ -214,6 +213,32 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .mobile-nav { display: none; }
 
+.access-shell { min-height: 100vh; padding: 28px; display: grid; place-items: center; background: #102a21; position: relative; overflow: hidden; }
+.access-shell::before, .access-shell::after { content: ""; width: 420px; height: 420px; position: absolute; border: 1px solid rgba(243,198,91,.18); border-radius: 50%; }
+.access-shell::before { left: -210px; top: -200px; }
+.access-shell::after { right: -210px; bottom: -220px; }
+.access-card { width: min(460px, 100%); padding: 38px; background: #f9faf6; border: 1px solid rgba(255,255,255,.25); border-radius: 10px; box-shadow: 0 28px 90px rgba(0,0,0,.28); position: relative; z-index: 1; }
+.access-brand { display: flex; align-items: center; gap: 15px; }
+.brand-tile { width: 52px; height: 58px; display: grid; place-items: center; color: white; background: var(--red); border-radius: 5px; box-shadow: 4px 4px 0 var(--yellow); font: 800 29px/1 "Noto Serif TC", serif; transform: rotate(-2deg); }
+.access-brand p { margin: 0 0 5px; color: var(--green); font: 9px/1 monospace; letter-spacing: .18em; }
+.access-brand h1 { margin: 0; font: 800 25px/1.1 "Noto Serif TC", serif; letter-spacing: .1em; }
+.mahjong-winds { margin: 38px 0 34px; display: flex; justify-content: center; align-items: flex-end; gap: 8px; }
+.mahjong-winds span { width: 52px; height: 70px; display: grid; place-items: center; color: var(--green); background: var(--cream); border: 1px solid #d2c8b3; border-radius: 4px; box-shadow: 0 5px 0 #d2c8b3; font: 800 22px/1 serif; }
+.mahjong-winds span:nth-child(2) { color: var(--red); transform: translateY(-7px); }
+.mahjong-winds span:nth-child(3) { transform: translateY(3px); }
+.access-copy > p { margin: 0 0 6px; color: var(--green); font-size: 10px; font-weight: 800; letter-spacing: .16em; }
+.access-copy h2 { margin: 0; font: 800 27px/1.3 "Noto Serif TC", serif; }
+.access-copy > span { display: block; margin-top: 10px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.access-form { margin-top: 24px; }
+.access-form label { display: flex; flex-direction: column; gap: 8px; color: #65736c; font-size: 10px; font-weight: 800; }
+.access-form input { height: 48px; padding: 0 13px; background: white; border: 1px solid var(--line); border-radius: 5px; font-size: 15px; letter-spacing: .08em; }
+.access-error { margin: 10px 0 0; color: #b33e30; font-size: 11px; line-height: 1.55; }
+.access-primary { width: 100%; height: 48px; margin-top: 14px; color: white; background: var(--green); border: 0; border-radius: 5px; box-shadow: 3px 3px 0 #0b3a2c; font-weight: 800; }
+.access-switch { width: 100%; margin-top: 17px; color: var(--green); background: none; border: 0; font-size: 11px; font-weight: 800; }
+.access-note { margin: 22px 0 0; padding-top: 18px; color: #89958f; border-top: 1px solid var(--line); font-size: 9px; line-height: 1.6; text-align: center; }
+.loading-access { min-height: 250px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
+.loading-access p { margin: 0; color: var(--muted); font-size: 12px; }
+
 @media (max-width: 1180px) {
   .app-shell { grid-template-columns: 210px 1fr; }
   .sidebar { padding-inline: 18px; }
@@ -235,6 +260,7 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
   .season-select > span { display: none; }
   .season-select select { min-width: 118px; }
   .export-button { display: none; }
+  .room-button { display: block; padding-inline: 11px; }
   .content { padding: 36px 18px 70px; }
   .page-heading { align-items: flex-start; }
   .player-filter { flex-direction: column; align-items: flex-start; gap: 5px; }
@@ -250,6 +276,7 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
   .topbar { gap: 8px; }
   .mobile-brand strong { display: none; }
   .top-actions { margin-left: auto; }
+  .room-button { font-size: 10px; }
   .add-button { padding-inline: 13px; }
   .page-heading { margin-bottom: 26px; }
   .page-heading p { font-size: 9px; }
@@ -300,6 +327,9 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
   .player-edit-list > div { grid-template-columns: 30px 1fr auto auto; }
   .player-edit-list span { display: none; }
   .players-modal .modal-actions p { display: none; }
+  .access-shell { padding: 16px; }
+  .access-card { padding: 30px 22px; }
+  .mahjong-winds span { width: 45px; height: 62px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
