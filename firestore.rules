@@ -67,6 +67,51 @@ service cloud.firestore {
           && request.resource.data.dealsIn is int
           && request.resource.data.dealsIn >= 0;
       }
+
+      match /settings/{settingId} {
+        allow read: if signedIn() && validRoom(roomId);
+        allow create, update: if signedIn()
+          && validRoom(roomId)
+          && settingId == 'general'
+          && request.resource.data.keys().hasOnly(['currentSeason', 'openingBalance', 'updatedAt'])
+          && request.resource.data.currentSeason is string
+          && request.resource.data.currentSeason.size() > 0
+          && request.resource.data.currentSeason.size() <= 24
+          && request.resource.data.openingBalance is int;
+        allow delete: if false;
+      }
+
+      match /expenses/{expenseId} {
+        allow read, delete: if signedIn() && validRoom(roomId);
+        allow create, update: if signedIn()
+          && validRoom(roomId)
+          && request.resource.data.keys().hasOnly(['spentAt', 'season', 'amount', 'note', 'createdAt'])
+          && request.resource.data.spentAt is string
+          && request.resource.data.season is string
+          && request.resource.data.season.size() > 0
+          && request.resource.data.season.size() <= 24
+          && request.resource.data.amount is int
+          && request.resource.data.amount > 0
+          && request.resource.data.note is string
+          && request.resource.data.note.size() <= 100;
+      }
+
+      match /adjustments/{adjustmentId} {
+        allow read, delete: if signedIn() && validRoom(roomId);
+        allow create, update: if signedIn()
+          && validRoom(roomId)
+          && request.resource.data.keys().hasOnly(['adjustedAt', 'season', 'amount', 'note', 'kind', 'balanceAfter', 'createdAt'])
+          && request.resource.data.adjustedAt is string
+          && request.resource.data.season is string
+          && request.resource.data.season.size() > 0
+          && request.resource.data.season.size() <= 24
+          && request.resource.data.amount is int
+          && request.resource.data.amount != 0
+          && request.resource.data.note is string
+          && request.resource.data.note.size() <= 100
+          && request.resource.data.kind in ['manual', 'reconciliation']
+          && (request.resource.data.balanceAfter == null || request.resource.data.balanceAfter is int);
+      }
     }
   }
 }

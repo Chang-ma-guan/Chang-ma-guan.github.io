@@ -30,7 +30,9 @@ export type GameResult = {
   selfDraws: number;
   dealsIn: number;
 };
-export type LedgerData = { players: Player[]; sessions: GameSession[]; results: GameResult[] };
+export type FundExpense = { id: string; spentAt: string; season: string; amount: number; note: string; createdAt: string };
+export type FundAdjustment = { id: string; adjustedAt: string; season: string; amount: number; note: string; kind: "manual" | "reconciliation"; balanceAfter: number | null; createdAt: string };
+export type LedgerData = { players: Player[]; sessions: GameSession[]; results: GameResult[]; expenses: FundExpense[]; adjustments: FundAdjustment[]; currentSeason: string; openingBalance: number };
 export type SeatResultInput = {
   playerId: string;
   amount: number;
@@ -129,16 +131,21 @@ export async function createRoom(code: string) {
   const roomId = await hashRoomCode(code);
   const reference = roomRef(roomId);
   if ((await getDoc(reference)).exists()) throw new Error("這個通關碼已經建立過，請直接進入");
-  await setDoc(reference, { name: "張麻館", createdAt: serverTimestamp(), version: 1 });
+  const batch = writeBatch(database);
+  batch.set(reference, { name: "張麻館", createdAt: serverTimestamp(), version: 1 });
+  batch.set(doc(database, "rooms", roomId, "settings", "general"), { currentSeason: "本季", openingBalance: 0, updatedAt: serverTimestamp() });
+  await batch.commit();
   window.localStorage.setItem(savedRoomKey, roomId);
   return roomId;
 }
 
 export function watchLedger(roomId: string, onData: (data: LedgerData) => void, onError: (message: string) => void) {
-  const current: LedgerData = { players: [], sessions: [], results: [] };
-  const ready = { players: false, sessions: false, results: false };
+  const current: LedgerData = { players: [], sessions: [], results: [], expenses: [], adjustments: [], currentSeason: "", openingBalance: 0 };
+  const ready = { players: false, sessions: false, results: false, expenses: false, adjustments: false, settings: false };
   const emit = () => {
-    if (ready.players && ready.sessions && ready.results) onData({ ...current });
+    if (ready.players && ready.sessions && ready.results && ready.expenses && ready.adjustments && ready.settings) {
+      onData({ ...current, currentSeason: current.currentSeason || current.sessions[0]?.season || "本季" });
+    }
   };
   const fail = (error: Error) => onError(error.message || "讀取資料失敗");
 
@@ -183,12 +190,106 @@ export function watchLedger(roomId: string, onData: (data: LedgerData) => void, 
     ready.results = true;
     emit();
   }, fail);
+  const stopExpenses = onSnapshot(
+    query(collection(database, "rooms", roomId, "expenses"), orderBy("spentAt", "desc")),
+    (snapshot) => {
+      current.expenses = snapshot.docs.map((row) => {
+        const value = row.data();
+        return { id: row.id, spentAt: String(value.spentAt ?? ""), season: String(value.season ?? "本季"), amount: Number(value.amount ?? 0), note: String(value.note ?? ""), createdAt: timestampToText(value.createdAt) };
+      });
+      ready.expenses = true;
+      emit();
+    },
+    fail,
+  );
+  const stopAdjustments = onSnapshot(
+    query(collection(database, "rooms", roomId, "adjustments"), orderBy("adjustedAt", "desc")),
+    (snapshot) => {
+      current.adjustments = snapshot.docs.map((row) => {
+        const value = row.data();
+        return {
+          id: row.id,
+          adjustedAt: String(value.adjustedAt ?? ""),
+          season: String(value.season ?? "本季"),
+          amount: Number(value.amount ?? 0),
+          note: String(value.note ?? ""),
+          kind: value.kind === "reconciliation" ? "reconciliation" : "manual",
+          balanceAfter: value.balanceAfter === null || value.balanceAfter === undefined ? null : Number(value.balanceAfter),
+          createdAt: timestampToText(value.createdAt),
+        };
+      });
+      ready.adjustments = true;
+      emit();
+    },
+    fail,
+  );
+  const stopSettings = onSnapshot(doc(database, "rooms", roomId, "settings", "general"), (snapshot) => {
+    current.currentSeason = snapshot.exists() ? String(snapshot.data().currentSeason ?? "") : "";
+    current.openingBalance = snapshot.exists() ? Number(snapshot.data().openingBalance ?? 0) : 0;
+    ready.settings = true;
+    emit();
+  }, fail);
 
   return () => {
     stopPlayers();
     stopSessions();
     stopResults();
+    stopExpenses();
+    stopAdjustments();
+    stopSettings();
   };
+}
+
+export async function setCurrentSeasonRecord(roomId: string, season: string, openingBalance: number) {
+  const currentSeason = season.trim();
+  if (!currentSeason) throw new Error("請輸入新賽季名稱");
+  if (currentSeason.length > 24) throw new Error("賽季名稱請勿超過 24 個字");
+  await setDoc(doc(database, "rooms", roomId, "settings", "general"), { currentSeason, openingBalance: Math.round(openingBalance), updatedAt: serverTimestamp() });
+}
+
+export async function setOpeningBalanceRecord(roomId: string, currentSeason: string, openingBalance: number) {
+  if (!Number.isInteger(openingBalance)) throw new Error("期初結轉餘額必須是整數");
+  await setDoc(doc(database, "rooms", roomId, "settings", "general"), { currentSeason: currentSeason.trim() || "本季", openingBalance, updatedAt: serverTimestamp() });
+}
+
+export async function saveFundExpense(roomId: string, input: { spentAt: string; season: string; amount: number; note: string }) {
+  if (!input.spentAt) throw new Error("請選擇支出日期");
+  if (!Number.isInteger(input.amount) || input.amount <= 0) throw new Error("請輸入正確的支出金額");
+  const season = input.season.trim();
+  if (!season) throw new Error("請選擇支出所屬賽季");
+  const id = crypto.randomUUID();
+  await setDoc(doc(database, "rooms", roomId, "expenses", id), {
+    spentAt: input.spentAt,
+    season,
+    amount: input.amount,
+    note: input.note.trim(),
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function deleteFundExpense(roomId: string, expenseId: string) {
+  await deleteDoc(doc(database, "rooms", roomId, "expenses", expenseId));
+}
+
+export async function saveFundAdjustment(roomId: string, input: { adjustedAt: string; season: string; amount: number; note: string; kind: "manual" | "reconciliation"; balanceAfter: number | null }) {
+  if (!input.adjustedAt) throw new Error("請選擇調整日期");
+  if (!Number.isInteger(input.amount) || input.amount === 0) throw new Error("調整差額不能是 0");
+  const season = input.season.trim();
+  if (!season) throw new Error("請選擇調整所屬賽季");
+  const id = crypto.randomUUID();
+  await setDoc(doc(database, "rooms", roomId, "adjustments", id), {
+    adjustedAt: input.adjustedAt,
+    season,
+    amount: input.amount,
+    note: input.note.trim(),
+    kind: input.kind,
+    balanceAfter: input.balanceAfter,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function deleteFundAdjustment(roomId: string, adjustmentId: string) {
+  await deleteDoc(doc(database, "rooms", roomId, "adjustments", adjustmentId));
 }
 
 export async function addPlayerRecord(roomId: string, input: { name: string; avatar: string; color: string }) {

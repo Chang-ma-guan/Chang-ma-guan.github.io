@@ -97,6 +97,36 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .award-card > b { grid-column: 1 / -1; padding-top: 11px; border-top: 1px solid #e3e8e3; font: 800 17px/1 monospace; text-align: right; }
 .award-card.featured > b { color: var(--yellow); border-top-color: rgba(255,255,255,.13); }
 
+.fund-panel { margin-top: 18px; overflow: hidden; background: white; border: 1px solid #cbd9d0; border-radius: 7px; }
+.fund-head { padding: 24px; display: flex; align-items: center; justify-content: space-between; gap: 24px; color: white; background: var(--green-dark); }
+.fund-head > div:first-child > span { display: block; margin-bottom: 6px; color: var(--yellow); font: 9px/1 monospace; letter-spacing: .18em; }
+.fund-head h2 { margin: 0; font: 800 25px/1.2 "Noto Serif TC", serif; }
+.fund-head p { margin: 7px 0 0; color: rgba(255,255,255,.58); font-size: 10px; }
+.fund-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.fund-actions button { min-height: 38px; padding: 0 13px; color: white; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.2); border-radius: 4px; font-size: 10px; font-weight: 800; }
+.fund-actions .fund-add { color: var(--ink); background: var(--yellow); border-color: var(--yellow); }
+.fund-summary { padding: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; background: #eef4f0; border-bottom: 1px solid var(--line); }
+.fund-summary article { min-width: 0; min-height: 105px; padding: 15px; display: flex; flex-direction: column; justify-content: center; background: white; border: 1px solid #dce5df; border-radius: 6px; }
+.fund-summary article > span { color: var(--muted); font-size: 9px; font-weight: 800; }
+.fund-summary article > strong { margin: 10px 0 7px; overflow: hidden; font: 800 22px/1 monospace; white-space: nowrap; text-overflow: ellipsis; }
+.fund-summary article > small { color: #98a19c; font-size: 8px; }
+.fund-summary .fund-balance { color: white; background: #173d30; border-color: #173d30; }
+.fund-summary .fund-balance > span, .fund-summary .fund-balance > small { color: rgba(255,255,255,.6); }
+.expense-history { padding: 22px 24px 24px; }
+.adjustment-history { padding-top: 0; }
+.expense-title { margin-bottom: 12px; display: flex; align-items: end; justify-content: space-between; gap: 16px; }
+.expense-title span { display: block; margin-bottom: 5px; color: var(--green); font: 8px/1 monospace; letter-spacing: .16em; }
+.expense-title h3 { margin: 0; font: 800 17px/1.2 "Noto Serif TC", serif; }
+.expense-title > small { color: var(--muted); font-size: 9px; }
+.expense-list { border-top: 1px solid var(--line); }
+.expense-list > div { min-height: 50px; display: grid; grid-template-columns: 86px 78px minmax(120px, 1fr) 100px 42px; align-items: center; gap: 10px; border-bottom: 1px solid #edf0ed; }
+.expense-list time { color: var(--muted); font: 10px/1 monospace; }
+.expense-season { overflow: hidden; padding: 4px 7px; color: var(--green); background: var(--green-soft); border-radius: 10px; font-size: 8px; text-align: center; white-space: nowrap; text-overflow: ellipsis; }
+.expense-list strong { overflow: hidden; font-size: 10px; white-space: nowrap; text-overflow: ellipsis; }
+.expense-list b { color: var(--red); font: 800 11px/1 monospace; text-align: right; }
+.expense-list button { padding: 5px; color: var(--red); background: none; border: 0; font-size: 9px; font-weight: 800; }
+.expense-empty { margin: 0; padding: 22px; color: var(--muted); background: #fafbfa; border: 1px dashed var(--line); border-radius: 5px; font-size: 10px; text-align: center; }
+
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, .75fr); gap: 18px; margin-top: 18px; }
 .panel { background: white; border: 1px solid var(--line); border-radius: 7px; }
 .panel-head { min-height: 86px; padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
@@ -230,6 +260,36 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
 .modal-actions button { min-width: 94px; height: 42px; padding: 0 16px; background: white; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; font-weight: 800; }
 .modal-actions .save-button { color: white; background: var(--green); border-color: var(--green); box-shadow: 3px 3px 0 #0b3a2c; }
 
+.compact-modal { width: min(560px, 100%); }
+.fund-tools-modal { width: min(640px, 100%); }
+.compact-modal form, .fund-tools-modal form { padding: 26px 28px 0; }
+.modal-field { margin-bottom: 17px; display: flex; flex-direction: column; gap: 7px; color: #718078; font-size: 10px; font-weight: 800; }
+.modal-field input, .modal-field select { width: 100%; height: 46px; padding: 0 12px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 4px; font-size: 14px; }
+.current-season-note, .reconcile-summary, .difference-preview { min-height: 54px; margin-bottom: 18px; padding: 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 20px; background: var(--green-soft); border: 1px solid #c9dfd2; border-radius: 5px; }
+.current-season-note span, .reconcile-summary span, .difference-preview span { color: var(--muted); font-size: 10px; }
+.current-season-note strong, .reconcile-summary strong, .difference-preview strong { font: 800 16px/1 monospace; }
+.form-help { margin: -3px 0 20px; color: var(--muted); font-size: 10px; line-height: 1.65; }
+.modal-error { margin: 0 0 14px; color: var(--red); font-size: 11px; font-weight: 800; }
+.compact-modal .modal-actions, .fund-tools-modal .modal-actions { margin: 22px -28px 0; }
+.expense-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.expense-money-input { position: relative; }
+.expense-money-input > span { position: absolute; left: 12px; top: 50%; z-index: 1; transform: translateY(-50%); color: #8b9690; }
+.expense-money-input input { padding-left: 27px; }
+.expense-money-input.signed-input input { padding-right: 54px; }
+.fund-tool-tabs { margin-bottom: 20px; padding: 4px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: #e9eeea; border-radius: 6px; }
+.fund-tool-tabs button { min-height: 39px; color: var(--muted); background: transparent; border: 0; border-radius: 4px; font-size: 10px; font-weight: 800; }
+.fund-tool-tabs button.active { color: white; background: var(--green); }
+.tool-explainer { margin-bottom: 18px; padding: 16px; background: var(--cream); border: 1px solid #e3dac2; border-radius: 5px; }
+.tool-explainer strong { font-size: 12px; }
+.tool-explainer p { margin: 6px 0 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.direction-picker { margin-bottom: 17px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.direction-picker button { min-height: 43px; color: var(--muted); background: white; border: 1px solid var(--line); border-radius: 5px; font-size: 11px; font-weight: 800; }
+.direction-picker button.active.add { color: var(--green); background: var(--green-soft); border-color: #a9cfb9; }
+.direction-picker button.active.subtract { color: var(--red); background: var(--red-soft); border-color: #e9bdb5; }
+.difference-preview { margin-top: -5px; }
+.difference-preview.positive-difference strong { color: var(--green); }
+.difference-preview.negative-difference strong { color: var(--red); }
+
 .players-modal { width: min(720px, 100%); }
 .new-player-form { display: grid; grid-template-columns: 1fr 72px 90px auto; align-items: end; gap: 12px; border-bottom: 1px solid var(--line); }
 .new-player-form .avatar-field input { width: 100%; text-align: center; font-size: 18px; font-weight: 800; }
@@ -306,6 +366,8 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
   .player-filter { flex-direction: column; align-items: flex-start; gap: 5px; }
   .player-filter select { min-width: 124px; }
   .player-card-grid { grid-template-columns: 1fr; }
+  .fund-head { align-items: flex-start; flex-direction: column; }
+  .fund-actions { width: 100%; justify-content: flex-start; }
   .mobile-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; height: 70px; display: grid; grid-template-columns: repeat(3, 1fr); background: rgba(255,255,255,.94); border-top: 1px solid var(--line); backdrop-filter: blur(12px); }
   .mobile-nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #829088; background: transparent; border: 0; font-size: 9px; }
   .mobile-nav button.active { color: var(--green); font-weight: 800; }
@@ -385,6 +447,25 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
   .player-edit-list span { display: none; }
   .players-modal .modal-actions p { display: none; }
   .award-grid { grid-template-columns: 1fr; }
+  .fund-head { padding: 20px; }
+  .fund-actions { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .fund-actions button { padding-inline: 7px; }
+  .fund-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; }
+  .fund-summary article { min-height: 98px; padding: 12px; }
+  .fund-summary article > strong { font-size: 18px; }
+  .fund-summary .fund-balance { grid-column: 1 / -1; }
+  .expense-history { padding: 18px; }
+  .expense-title { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .expense-list > div { min-height: 66px; grid-template-columns: 70px minmax(0, 1fr) 74px 34px; grid-template-rows: 22px 22px; gap: 3px 7px; }
+  .expense-list time { grid-column: 1; grid-row: 1; }
+  .expense-season { grid-column: 2; grid-row: 1; justify-self: start; max-width: 100%; }
+  .expense-list strong { grid-column: 1 / 3; grid-row: 2; }
+  .expense-list b { grid-column: 3; grid-row: 1 / 3; }
+  .expense-list button { grid-column: 4; grid-row: 1 / 3; }
+  .compact-modal form, .fund-tools-modal form { padding: 20px 20px 0; }
+  .compact-modal .modal-actions, .fund-tools-modal .modal-actions { margin: 20px -20px 0; }
+  .fund-tool-tabs button { font-size: 9px; }
+  .expense-form-grid { grid-template-columns: 1fr; gap: 0; }
   .access-shell { padding: 16px; }
   .access-card { padding: 30px 22px; }
   .mahjong-winds span { width: 45px; height: 62px; }

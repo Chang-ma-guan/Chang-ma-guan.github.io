@@ -1,7 +1,9 @@
-import { type FocusEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FocusEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addPlayerRecord,
   createRoom,
+  deleteFundAdjustment,
+  deleteFundExpense,
   deleteGameRecord,
   ensureGuestAuth,
   enterRoom,
@@ -9,11 +11,17 @@ import {
   getSavedRoomId,
   removePlayerRecord,
   restoreRoom,
+  saveFundAdjustment,
+  saveFundExpense,
   saveGameRecord,
+  setCurrentSeasonRecord,
+  setOpeningBalanceRecord,
   updatePlayerRecord,
   watchLedger,
   type GameResult,
   type GameSession,
+  type FundAdjustment,
+  type FundExpense,
   type LedgerData,
   type Player,
 } from "./firebase";
@@ -45,7 +53,7 @@ type PlayerStats = {
 };
 
 const playerColors = ["#167c5a", "#e6533f", "#e7ae35", "#5266bd", "#bd477b", "#6b7280", "#1297aa", "#8660aa"];
-const emptyData: LedgerData = { players: [], sessions: [], results: [] };
+const emptyData: LedgerData = { players: [], sessions: [], results: [], expenses: [], adjustments: [], currentSeason: "本季", openingBalance: 0 };
 
 function today() { return new Date().toISOString().slice(0, 10); }
 function freshSeats(): SeatInput[] {
@@ -87,9 +95,13 @@ export default function Home() {
   const [message, setMessage] = useState("");
   const [view, setView] = useState<View>("overview");
   const [season, setSeason] = useState("全部賽季");
+  const seasonInitialized = useRef(false);
   const [focusPlayer, setFocusPlayer] = useState("all");
   const [recordOpen, setRecordOpen] = useState(false);
   const [playersOpen, setPlayersOpen] = useState(false);
+  const [seasonOpen, setSeasonOpen] = useState(false);
+  const [expenseOpen, setExpenseOpen] = useState(false);
+  const [fundToolsOpen, setFundToolsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [playedAt, setPlayedAt] = useState(today());
@@ -119,6 +131,10 @@ export default function Home() {
     if (!roomId) return;
     return watchLedger(roomId, (next) => {
       setData(next);
+      if (!seasonInitialized.current) {
+        setSeason(next.currentSeason || "本季");
+        seasonInitialized.current = true;
+      }
       setLoading(false);
       setMessage("");
     }, (error) => {
@@ -127,10 +143,12 @@ export default function Home() {
     });
   }, [roomId]);
 
-  const seasons = useMemo(() => Array.from(new Set(data.sessions.map((item) => item.season))), [data.sessions]);
+  const seasons = useMemo(() => Array.from(new Set([data.currentSeason, ...data.sessions.map((item) => item.season), ...data.expenses.map((item) => item.season), ...data.adjustments.map((item) => item.season)].filter(Boolean))), [data.adjustments, data.currentSeason, data.expenses, data.sessions]);
   const filteredSessions = useMemo(() => data.sessions.filter((item) => season === "全部賽季" || item.season === season), [data.sessions, season]);
   const filteredSessionIds = useMemo(() => new Set(filteredSessions.map((item) => item.id)), [filteredSessions]);
   const filteredResults = useMemo(() => data.results.filter((item) => filteredSessionIds.has(item.sessionId)), [data.results, filteredSessionIds]);
+  const filteredExpenses = useMemo(() => data.expenses.filter((item) => season === "全部賽季" || item.season === season), [data.expenses, season]);
+  const filteredAdjustments = useMemo(() => data.adjustments.filter((item) => season === "全部賽季" || item.season === season), [data.adjustments, season]);
 
   const stats = useMemo(() => {
     const roundsBySession = new Map(filteredSessions.map((session) => [session.id, session.rounds]));
@@ -178,6 +196,14 @@ export default function Home() {
   const totalTurnover = filteredResults.filter((item) => item.amount > 0).reduce((sum, item) => sum + item.amount, 0);
   const totalSelfDraws = filteredResults.reduce((sum, item) => sum + item.selfDraws, 0);
   const totalDealsIn = filteredResults.reduce((sum, item) => sum + item.dealsIn, 0);
+  const fundIncome = filteredResults.filter((item) => item.amount < 0).reduce((sum, item) => sum + Math.abs(item.amount), 0);
+  const fundSpending = filteredExpenses.reduce((sum, item) => sum + item.amount, 0);
+  const fundAdjustment = filteredAdjustments.reduce((sum, item) => sum + item.amount, 0);
+  const fundBalance = fundIncome - fundSpending + fundAdjustment + (season === "全部賽季" ? data.openingBalance : 0);
+  const allTimeFundIncome = data.results.filter((item) => item.amount < 0).reduce((sum, item) => sum + Math.abs(item.amount), 0);
+  const allTimeFundSpending = data.expenses.reduce((sum, item) => sum + item.amount, 0);
+  const allTimeFundAdjustment = data.adjustments.reduce((sum, item) => sum + item.amount, 0);
+  const allTimeFundBalance = data.openingBalance + allTimeFundIncome - allTimeFundSpending + allTimeFundAdjustment;
   const totalRounds = filteredSessions.reduce((sum, item) => sum + item.rounds, 0);
   const totalWinningRecords = stats.reduce((sum, item) => sum + item.winningGames, 0);
   const totalLosingRecords = stats.reduce((sum, item) => sum + item.losingGames, 0);
@@ -227,12 +253,12 @@ export default function Home() {
   const resetRecordForm = useCallback(() => {
     setEditingId(null);
     setPlayedAt(today());
-    setRecordSeason(seasons[0] ?? "本季");
+    setRecordSeason(data.currentSeason || "本季");
     setRounds("1");
     setNote("");
     setSeats(freshSeats());
     setMessage("");
-  }, [seasons]);
+  }, [data.currentSeason]);
 
   function openNewRecord() {
     resetRecordForm();
@@ -278,6 +304,8 @@ export default function Home() {
     forgetSavedRoom();
     setRoomId(null);
     setData(emptyData);
+    setSeason("全部賽季");
+    seasonInitialized.current = false;
     setAccessError("");
   }
 
@@ -301,6 +329,56 @@ export default function Home() {
       setMessage("紀錄已刪除。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "刪除失敗");
+    }
+  }
+
+  async function changeCurrentSeason(nextSeason: string) {
+    if (!roomId) return;
+    await setCurrentSeasonRecord(roomId, nextSeason, data.openingBalance);
+    setSeason(nextSeason.trim());
+    setRecordSeason(nextSeason.trim());
+    setSeasonOpen(false);
+    setMessage(`已換成「${nextSeason.trim()}」，之後新增的對局會自動放在這一季。`);
+  }
+
+  async function addExpense(input: { spentAt: string; season: string; amount: number; note: string }) {
+    if (!roomId) return;
+    await saveFundExpense(roomId, input);
+    setExpenseOpen(false);
+    setMessage(`已從張家麻將基金扣除 ${formatMoney(input.amount, false)}。`);
+  }
+
+  async function removeExpense(expense: FundExpense) {
+    if (!roomId || !window.confirm(`確定刪除「${expense.note || "旅遊支出"}」${formatMoney(expense.amount, false)} 嗎？`)) return;
+    try {
+      await deleteFundExpense(roomId, expense.id);
+      setMessage("基金支出紀錄已刪除，餘額已重新計算。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "刪除支出失敗");
+    }
+  }
+
+  async function updateOpeningBalance(value: number) {
+    if (!roomId) return;
+    await setOpeningBalanceRecord(roomId, data.currentSeason, value);
+    setFundToolsOpen(false);
+    setMessage(`已將歷年結轉餘額設為 ${formatMoney(value)}。`);
+  }
+
+  async function addAdjustment(input: { adjustedAt: string; season: string; amount: number; note: string; kind: "manual" | "reconciliation"; balanceAfter: number | null }) {
+    if (!roomId) return;
+    await saveFundAdjustment(roomId, input);
+    setFundToolsOpen(false);
+    setMessage(input.kind === "reconciliation" ? `對帳完成，基金帳面餘額已調整為 ${formatMoney(input.balanceAfter ?? 0)}。` : `帳務調整 ${formatMoney(input.amount)} 已記錄。`);
+  }
+
+  async function removeAdjustment(adjustment: FundAdjustment) {
+    if (!roomId || !window.confirm(`確定刪除這筆帳務調整 ${formatMoney(adjustment.amount)} 嗎？`)) return;
+    try {
+      await deleteFundAdjustment(roomId, adjustment.id);
+      setMessage("帳務調整已刪除，基金餘額已重新計算。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "刪除調整失敗");
     }
   }
 
@@ -375,7 +453,7 @@ export default function Home() {
       <section className="workspace">
         <header className="topbar">
           <div className="mobile-brand"><span>張</span><strong>張麻館</strong></div>
-          <label className="season-select"><span>統計區間</span><select value={season} onChange={(event) => setSeason(event.target.value)}><option>全部賽季</option>{seasons.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label className="season-select"><span>統計區間</span><select value={season} onChange={(event) => { if (event.target.value === "__new_season__") setSeasonOpen(true); else setSeason(event.target.value); }}><option>全部賽季</option>{seasons.map((item) => <option key={item} value={item}>{item}{item === data.currentSeason ? "（目前）" : ""}</option>)}<option value="__new_season__">＋ 開始新一季…</option></select></label>
           <div className="top-actions"><button className="room-button" type="button" onClick={switchRoom}>換館</button><button className="export-button" type="button" onClick={exportCsv} disabled={!data.sessions.length}>↓ 匯出 Excel</button><button className="add-button" type="button" onClick={openNewRecord}><span>＋</span> 記一局</button></div>
         </header>
 
@@ -394,7 +472,7 @@ export default function Home() {
               <section className="metric-grid" aria-label="主要統計">
                 <Metric label={focused ? `${focused.player.name} 淨輸贏` : "總對局數"} value={focused ? formatMoney(focused.net) : `${filteredSessions.length}`} unit={focused ? "" : "場"} tone={focused && focused.net < 0 ? "red" : "green"} hint={focused ? `${focused.games} 場紀錄` : `${season} · ${data.players.filter((player) => player.active).length} 位成員`} />
                 <Metric label={focused ? "勝率" : "本季手氣王"} value={focused ? percentage(focused.winRate) : leader?.player.name ?? "—"} unit="" tone="dark" hint={focused ? `贏錢 ${focused.winningGames} 場／輸錢 ${focused.losingGames} 場` : leader ? formatMoney(leader.net) : "還沒有對局"} />
-                <Metric label={focused ? "平均每場" : "正向金流"} value={focused ? formatMoney(focused.average) : `$${totalTurnover.toLocaleString("zh-TW")}`} unit="" tone="cream" hint={focused ? `單場最佳 ${formatMoney(focused.best)}` : "所有贏家金額加總"} />
+                <Metric label={focused ? "平均每場" : season === "全部賽季" ? "基金總收入" : "本季基金收入"} value={focused ? formatMoney(focused.average) : formatMoney(fundIncome, false)} unit="" tone="cream" hint={focused ? `單場最佳 ${formatMoney(focused.best)}` : "所有輸家繳入的金額"} />
                 <Metric label={focused ? "自摸 / 放槍" : "累積自摸數"} value={focused ? `${focused.selfDraws} / ${focused.dealsIn}` : `${totalSelfDraws}`} unit="次" tone="yellow" hint={focused ? `平均 ${decimal(focused.selfDrawsPerGame)}／${decimal(focused.dealsInPerGame)} 次` : `${totalDealsIn} 次放槍`} />
               </section>
               <section className="quick-stat-grid" aria-label={focused ? `${focused.player.name}詳細統計` : "牌局詳細統計"}>
@@ -409,6 +487,8 @@ export default function Home() {
                   <b>{award.value}</b>
                 </article>)}</div>
               </section>
+
+              <FundPanel season={season} currentSeason={data.currentSeason} openingBalance={data.openingBalance} income={fundIncome} spending={fundSpending} adjustment={fundAdjustment} balance={fundBalance} allTimeBalance={allTimeFundBalance} expenses={filteredExpenses} adjustments={filteredAdjustments} onChangeSeason={() => setSeasonOpen(true)} onAddExpense={() => setExpenseOpen(true)} onOpenFundTools={() => setFundToolsOpen(true)} onDeleteExpense={removeExpense} onDeleteAdjustment={removeAdjustment} />
 
               <section className="dashboard-grid">
                 <article className="panel leaderboard-panel">
@@ -444,6 +524,9 @@ export default function Home() {
 
       {recordOpen && <RecordModal editing={Boolean(editingId)} players={data.players} seasons={seasons} playedAt={playedAt} setPlayedAt={setPlayedAt} season={recordSeason} setSeason={setRecordSeason} rounds={rounds} setRounds={setRounds} note={note} setNote={setNote} seats={seats} setSeats={setSeats} balance={balance} valid={recordValid} saving={saving} onClose={() => setRecordOpen(false)} onSubmit={submitRecord} />}
       {playersOpen && <PlayersModal players={data.players} newPlayer={newPlayer} setNewPlayer={setNewPlayer} newAvatar={newAvatar} setNewAvatar={setNewAvatar} newColor={newColor} setNewColor={setNewColor} onAdd={addPlayer} onUpdate={updatePlayer} onRemove={removePlayer} onClose={() => { setPlayersOpen(false); setMessage(""); }} />}
+      {seasonOpen && <SeasonModal currentSeason={data.currentSeason} seasons={seasons} onClose={() => setSeasonOpen(false)} onSave={changeCurrentSeason} />}
+      {expenseOpen && <ExpenseModal currentSeason={data.currentSeason} seasons={seasons} onClose={() => setExpenseOpen(false)} onSave={addExpense} />}
+      {fundToolsOpen && <FundToolsModal currentSeason={data.currentSeason} seasons={seasons} openingBalance={data.openingBalance} bookBalance={allTimeFundBalance} onClose={() => setFundToolsOpen(false)} onSaveOpening={updateOpeningBalance} onSaveAdjustment={addAdjustment} />}
     </main>
   );
 }
@@ -563,6 +646,151 @@ function PlayersView({ stats, maxBar, onManage }: { stats: PlayerStats[]; maxBar
       </table></div>
     </article>}
   </>;
+}
+
+function FundPanel({ season, currentSeason, openingBalance, income, spending, adjustment, balance, allTimeBalance, expenses, adjustments, onChangeSeason, onAddExpense, onOpenFundTools, onDeleteExpense, onDeleteAdjustment }: {
+  season: string;
+  currentSeason: string;
+  openingBalance: number;
+  income: number;
+  spending: number;
+  adjustment: number;
+  balance: number;
+  allTimeBalance: number;
+  expenses: FundExpense[];
+  adjustments: FundAdjustment[];
+  onChangeSeason: () => void;
+  onAddExpense: () => void;
+  onOpenFundTools: () => void;
+  onDeleteExpense: (expense: FundExpense) => Promise<void>;
+  onDeleteAdjustment: (adjustment: FundAdjustment) => Promise<void>;
+}) {
+  const periodName = season === "全部賽季" ? "全部賽季" : season;
+  return <section className="fund-panel" aria-label="張家麻將基金">
+    <header className="fund-head"><div><span>CHANG FAMILY FUND</span><h2>張家麻將基金</h2><p>輸家繳入、贏家不領，旅遊支出直接從基金扣除。</p></div><div className="fund-actions"><button type="button" onClick={onChangeSeason}>換季</button><button type="button" onClick={onOpenFundTools}>對帳／調整</button><button className="fund-add" type="button" onClick={onAddExpense}>＋ 記旅遊支出</button></div></header>
+    <div className="fund-summary">
+      <article><span>歷年結轉餘額</span><strong>{formatMoney(openingBalance)}</strong><small>網站啟用前的舊基金</small></article>
+      <article><span>{periodName}基金收入</span><strong className="money-up">{formatMoney(income, false)}</strong><small>所有輸家繳入</small></article>
+      <article><span>{periodName}旅遊支出</span><strong className={spending ? "money-down" : ""}>{spending ? `-$${spending.toLocaleString("zh-TW")}` : "$0"}</strong><small>已登記的支出</small></article>
+      <article><span>{periodName}帳務調整</span><strong className={adjustment >= 0 ? "money-up" : "money-down"}>{formatMoney(adjustment)}</strong><small>補入或扣除的差額</small></article>
+      <article><span>{periodName}結餘</span><strong className={balance >= 0 ? "money-up" : "money-down"}>{formatMoney(balance)}</strong><small>收入扣除支出</small></article>
+      <article className="fund-balance"><span>基金目前總餘額</span><strong className={allTimeBalance >= 0 ? "money-up" : "money-down"}>{formatMoney(allTimeBalance)}</strong><small>全部賽季累計</small></article>
+    </div>
+    <div className="expense-history"><div className="expense-title"><div><span>TRAVEL EXPENSES</span><h3>旅遊支出紀錄</h3></div><small>目前賽季：{currentSeason}</small></div>
+      {expenses.length ? <div className="expense-list">{expenses.slice(0, 8).map((expense) => <div key={expense.id}><time>{formatDate(expense.spentAt)}</time><span className="expense-season">{expense.season}</span><strong>{expense.note || "旅遊支出"}</strong><b>-${expense.amount.toLocaleString("zh-TW")}</b><button type="button" onClick={() => void onDeleteExpense(expense)}>刪除</button></div>)}</div> : <p className="expense-empty">這個統計區間還沒有旅遊支出。</p>}
+    </div>
+    <div className="expense-history adjustment-history"><div className="expense-title"><div><span>ACCOUNT ADJUSTMENTS</span><h3>對帳與調整紀錄</h3></div><small>所有差額都有紀錄，可隨時刪除重算</small></div>
+      {adjustments.length ? <div className="expense-list">{adjustments.slice(0, 8).map((item) => <div key={item.id}><time>{formatDate(item.adjustedAt)}</time><span className="expense-season">{item.season}</span><strong>{item.note || (item.kind === "reconciliation" ? "帳戶對帳" : "帳務調整")}{item.balanceAfter !== null ? `（對帳後 ${formatMoney(item.balanceAfter)}）` : ""}</strong><b className={item.amount >= 0 ? "money-up" : "money-down"}>{formatMoney(item.amount)}</b><button type="button" onClick={() => void onDeleteAdjustment(item)}>刪除</button></div>)}</div> : <p className="expense-empty">目前沒有帳務調整。</p>}
+    </div>
+  </section>;
+}
+
+function SeasonModal({ currentSeason, seasons, onClose, onSave }: { currentSeason: string; seasons: string[]; onClose: () => void; onSave: (season: string) => Promise<void> }) {
+  const [value, setValue] = useState("");
+  const [savingSeason, setSavingSeason] = useState(false);
+  const [error, setError] = useState("");
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!value.trim()) return;
+    setSavingSeason(true);
+    setError("");
+    try { await onSave(value); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "換季失敗"); setSavingSeason(false); }
+  }
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><div className="modal compact-modal" role="dialog" aria-modal="true" aria-labelledby="season-title"><header className="modal-head"><div><p>NEW SEASON</p><h2 id="season-title">開始新一季</h2></div><button type="button" aria-label="關閉" onClick={onClose}>×</button></header><form onSubmit={submit}>
+    <div className="current-season-note"><span>目前賽季</span><strong>{currentSeason}</strong></div>
+    <label className="modal-field">新賽季名稱<input list="existing-season-options" value={value} onChange={(event) => setValue(event.target.value)} placeholder="例如：第十季" maxLength={24} required /><datalist id="existing-season-options">{seasons.map((item) => <option key={item} value={item} />)}</datalist></label>
+    <p className="form-help">換季不會清除舊資料；之後新增對局和支出會自動使用新賽季。</p>
+    {error && <p className="modal-error">{error}</p>}
+    <footer className="modal-actions"><button type="button" onClick={onClose}>取消</button><button className="save-button" type="submit" disabled={!value.trim() || savingSeason}>{savingSeason ? "儲存中…" : "確認換季"}</button></footer>
+  </form></div></div>;
+}
+
+function ExpenseModal({ currentSeason, seasons, onClose, onSave }: { currentSeason: string; seasons: string[]; onClose: () => void; onSave: (input: { spentAt: string; season: string; amount: number; note: string }) => Promise<void> }) {
+  const [spentAt, setSpentAt] = useState(today());
+  const [expenseSeason, setExpenseSeason] = useState(currentSeason);
+  const [amount, setAmount] = useState("");
+  const [expenseNote, setExpenseNote] = useState("");
+  const [savingExpense, setSavingExpense] = useState(false);
+  const [error, setError] = useState("");
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const number = Number(amount);
+    if (!Number.isInteger(number) || number <= 0) { setError("請輸入正確的支出金額"); return; }
+    setSavingExpense(true);
+    setError("");
+    try { await onSave({ spentAt, season: expenseSeason, amount: number, note: expenseNote }); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "儲存支出失敗"); setSavingExpense(false); }
+  }
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><div className="modal compact-modal expense-modal" role="dialog" aria-modal="true" aria-labelledby="expense-title"><header className="modal-head"><div><p>TRAVEL EXPENSE</p><h2 id="expense-title">記旅遊支出</h2></div><button type="button" aria-label="關閉" onClick={onClose}>×</button></header><form onSubmit={submit}>
+    <div className="expense-form-grid"><label className="modal-field">日期<input type="date" value={spentAt} onChange={(event) => setSpentAt(event.target.value)} required /></label><label className="modal-field">賽季<select value={expenseSeason} onChange={(event) => setExpenseSeason(event.target.value)}>{seasons.map((item) => <option key={item}>{item}</option>)}</select></label></div>
+    <label className="modal-field">旅遊花費金額<div className="expense-money-input"><span>$</span><input type="text" inputMode="numeric" pattern="[0-9]*" value={amount} onFocus={selectNumber} onChange={(event) => { const next = event.target.value.trim(); if (/^\d*$/.test(next)) setAmount(next); }} placeholder="0" required /></div></label>
+    <label className="modal-field">用途或備註<input value={expenseNote} onChange={(event) => setExpenseNote(event.target.value)} placeholder="例如：宜蘭住宿、遊覽車" maxLength={100} /></label>
+    <p className="form-help">儲存後會立刻從張家麻將基金餘額扣除。</p>
+    {error && <p className="modal-error">{error}</p>}
+    <footer className="modal-actions"><button type="button" onClick={onClose}>取消</button><button className="save-button" type="submit" disabled={!spentAt || !expenseSeason || !amount || savingExpense}>{savingExpense ? "儲存中…" : "扣除並儲存"}</button></footer>
+  </form></div></div>;
+}
+
+function FundToolsModal({ currentSeason, seasons, openingBalance, bookBalance, onClose, onSaveOpening, onSaveAdjustment }: {
+  currentSeason: string;
+  seasons: string[];
+  openingBalance: number;
+  bookBalance: number;
+  onClose: () => void;
+  onSaveOpening: (value: number) => Promise<void>;
+  onSaveAdjustment: (input: { adjustedAt: string; season: string; amount: number; note: string; kind: "manual" | "reconciliation"; balanceAfter: number | null }) => Promise<void>;
+}) {
+  const [mode, setMode] = useState<"opening" | "manual" | "reconcile">("opening");
+  const [opening, setOpening] = useState(String(openingBalance));
+  const [adjustedAt, setAdjustedAt] = useState(today());
+  const [adjustmentSeason, setAdjustmentSeason] = useState(currentSeason);
+  const [direction, setDirection] = useState<"add" | "subtract">("add");
+  const [amount, setAmount] = useState("");
+  const [actualBalance, setActualBalance] = useState("");
+  const [adjustmentNote, setAdjustmentNote] = useState("");
+  const [savingTool, setSavingTool] = useState(false);
+  const [error, setError] = useState("");
+  const reconciliationDifference = actualBalance.trim() && /^-?\d+$/.test(actualBalance) ? Number(actualBalance) - bookBalance : null;
+  function updateSigned(value: string, setter: (next: string) => void) { if (/^-?\d*$/.test(value.trim())) setter(value.trim()); }
+  function toggleSigned(value: string, setter: (next: string) => void) { setter(value.startsWith("-") ? value.slice(1) : `-${value}`); }
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    setSavingTool(true);
+    try {
+      if (mode === "opening") {
+        const value = Number(opening);
+        if (!Number.isInteger(value)) throw new Error("請輸入正確的期初結轉餘額");
+        await onSaveOpening(value);
+        return;
+      }
+      if (mode === "manual") {
+        const value = Number(amount);
+        if (!Number.isInteger(value) || value <= 0) throw new Error("請輸入正確的調整金額");
+        await onSaveAdjustment({ adjustedAt, season: adjustmentSeason, amount: direction === "add" ? value : -value, note: adjustmentNote, kind: "manual", balanceAfter: null });
+        return;
+      }
+      const actual = Number(actualBalance);
+      if (!Number.isInteger(actual)) throw new Error("請輸入正確的帳戶實際餘額");
+      const difference = actual - bookBalance;
+      if (difference === 0) throw new Error("帳戶餘額與帳面餘額已經一致，不需調整");
+      await onSaveAdjustment({ adjustedAt, season: adjustmentSeason, amount: difference, note: adjustmentNote || "帳戶餘額對帳", kind: "reconciliation", balanceAfter: actual });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "儲存失敗");
+      setSavingTool(false);
+    }
+  }
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><div className="modal fund-tools-modal" role="dialog" aria-modal="true" aria-labelledby="fund-tools-title"><header className="modal-head"><div><p>FUND ACCOUNTING</p><h2 id="fund-tools-title">基金設定與對帳</h2></div><button type="button" aria-label="關閉" onClick={onClose}>×</button></header><form onSubmit={submit}>
+    <div className="fund-tool-tabs"><button className={mode === "opening" ? "active" : ""} type="button" onClick={() => { setMode("opening"); setError(""); }}>期初結轉</button><button className={mode === "manual" ? "active" : ""} type="button" onClick={() => { setMode("manual"); setError(""); }}>帳務調整</button><button className={mode === "reconcile" ? "active" : ""} type="button" onClick={() => { setMode("reconcile"); setError(""); }}>帳戶對帳</button></div>
+    {mode === "opening" ? <div className="fund-tool-content"><div className="tool-explainer"><strong>以前已經結算很多季？</strong><p>把網站啟用前留下來的基金填在這裡，不用重打以前每一場。</p></div><label className="modal-field">歷年結轉餘額<div className="expense-money-input signed-input"><span>$</span><input type="text" inputMode="numeric" pattern="-?[0-9]*" value={opening} onFocus={selectNumber} onChange={(event) => updateSigned(event.target.value, setOpening)} required /><button className={opening.startsWith("-") ? "money-sign-toggle negative" : "money-sign-toggle"} type="button" onClick={() => toggleSigned(opening, setOpening)}>±</button></div></label></div> : <div className="fund-tool-content">
+      <div className="expense-form-grid"><label className="modal-field">日期<input type="date" value={adjustedAt} onChange={(event) => setAdjustedAt(event.target.value)} required /></label><label className="modal-field">賽季<select value={adjustmentSeason} onChange={(event) => setAdjustmentSeason(event.target.value)}>{seasons.map((item) => <option key={item}>{item}</option>)}</select></label></div>
+      {mode === "manual" ? <><div className="direction-picker"><button className={direction === "add" ? "active add" : ""} type="button" onClick={() => setDirection("add")}>＋ 補入基金</button><button className={direction === "subtract" ? "active subtract" : ""} type="button" onClick={() => setDirection("subtract")}>－ 扣除基金</button></div><label className="modal-field">調整金額<div className="expense-money-input"><span>$</span><input type="text" inputMode="numeric" pattern="[0-9]*" value={amount} onFocus={selectNumber} onChange={(event) => { const next = event.target.value.trim(); if (/^\d*$/.test(next)) setAmount(next); }} placeholder="0" required /></div></label></> : <><div className="reconcile-summary"><span>網站帳面餘額</span><strong>{formatMoney(bookBalance)}</strong></div><label className="modal-field">銀行帳戶目前實際餘額<div className="expense-money-input signed-input"><span>$</span><input type="text" inputMode="numeric" pattern="-?[0-9]*" value={actualBalance} onFocus={selectNumber} onChange={(event) => updateSigned(event.target.value, setActualBalance)} placeholder="請輸入實際餘額" required /><button className={actualBalance.startsWith("-") ? "money-sign-toggle negative" : "money-sign-toggle"} type="button" onClick={() => toggleSigned(actualBalance, setActualBalance)}>±</button></div></label>{reconciliationDifference !== null && <div className={`difference-preview ${reconciliationDifference >= 0 ? "positive-difference" : "negative-difference"}`}><span>系統會自動建立調整分錄</span><strong>{formatMoney(reconciliationDifference)}</strong></div>}</>}
+      <label className="modal-field">調整原因（選填）<input value={adjustmentNote} onChange={(event) => setAdjustmentNote(event.target.value)} placeholder={mode === "reconcile" ? "例如：8/24 銀行帳戶對帳" : "例如：補登現金、手續費"} maxLength={100} /></label>
+    </div>}
+    {error && <p className="modal-error">{error}</p>}
+    <footer className="modal-actions"><button type="button" onClick={onClose}>取消</button><button className="save-button" type="submit" disabled={savingTool}>{savingTool ? "儲存中…" : mode === "opening" ? "儲存結轉餘額" : mode === "manual" ? "儲存調整" : "完成對帳"}</button></footer>
+  </form></div></div>;
 }
 
 function RecordModal({ editing, players, seasons, playedAt, setPlayedAt, season, setSeason, rounds, setRounds, note, setNote, seats, setSeats, balance, valid, saving, onClose, onSubmit }: {
