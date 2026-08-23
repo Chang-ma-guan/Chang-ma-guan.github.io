@@ -183,8 +183,9 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
 .seat-row:first-of-type { border-top: 0; }
 .seat-order { width: 22px; height: 22px; display: grid; place-items: center; color: white; background: var(--green); border-radius: 50%; font: 9px/1 monospace; }
 .seat-row label > span { display: none; }
+.seat-row label, .seat-row select, .seat-row input, .money-input { min-width: 0; }
 .seat-row select, .seat-row input { width: 100%; }
-.money-input { position: relative; }
+.money-input { position: relative; width: 100%; }
 .money-input i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #8b9690; font-style: normal; font-size: 11px; }
 .money-input input { padding-left: 22px; }
 .balance-check { min-height: 50px; margin-top: 14px; padding: 0 15px; display: flex; align-items: center; justify-content: space-between; border-radius: 5px; font-size: 11px; font-weight: 800; }
@@ -311,20 +312,26 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
   .player-stat-card header > strong { font-size: 17px; }
   .player-stat-card dl { grid-template-columns: repeat(2, 1fr); }
   .modal-backdrop { padding: 0; align-items: end; }
-  .modal { width: 100%; max-height: 94vh; border-radius: 12px 12px 0 0; }
+  .modal { width: 100%; max-height: 94vh; max-height: 94dvh; border-radius: 12px 12px 0 0; }
   .modal-head { min-height: 82px; padding: 18px 20px; }
   .record-modal form, .players-modal > form { padding: 20px; }
   .record-basics { grid-template-columns: 1fr 1fr; }
   .record-basics label:last-child { grid-column: 1 / -1; }
   .seat-table { border: 0; overflow: visible; }
   .seat-head { display: none; }
-  .seat-row { min-height: 0; margin-bottom: 10px; padding: 14px; grid-template-columns: 24px 1fr 1fr; gap: 10px; border: 1px solid var(--line) !important; border-radius: 6px; }
+  .record-modal { overflow-x: hidden; scroll-padding-bottom: 110px; }
+  .record-modal input, .record-modal select { font-size: 16px; }
+  .seat-row { min-height: 0; margin-bottom: 12px; padding: 14px 12px; grid-template-columns: 24px repeat(6, minmax(0, 1fr)); align-items: end; gap: 10px 6px; border: 1px solid var(--line) !important; border-radius: 7px; box-shadow: 0 2px 0 rgba(16,42,33,.04); }
   .seat-row label { display: flex; flex-direction: column; gap: 5px; }
-  .seat-row label > span { display: block; color: #849089; font-size: 8px; font-weight: 800; }
-  .seat-row label:nth-of-type(1), .seat-row label:nth-of-type(2) { grid-column: span 1; }
-  .seat-row label:nth-of-type(3) { grid-column: 2; }
-  .seat-row label:nth-of-type(4), .seat-row label:nth-of-type(5) { grid-column: auto; }
-  .seat-order { grid-row: 1 / 3; align-self: start; margin-top: 18px; }
+  .seat-row label > span { display: block; color: #6f7e76; font-size: 9px; font-weight: 800; }
+  .seat-player { grid-column: 2 / span 3; }
+  .seat-amount { grid-column: 5 / span 3; }
+  .seat-wins { grid-column: 2 / span 2; }
+  .seat-selfDraws { grid-column: 4 / span 2; }
+  .seat-dealsIn { grid-column: 6 / span 2; }
+  .seat-row select, .seat-row input { height: 46px; scroll-margin-bottom: 120px; }
+  .seat-stat input { padding-inline: 6px; text-align: center; font-size: 16px; font-weight: 700; }
+  .seat-order { grid-column: 1; grid-row: 1 / 3; align-self: start; margin-top: 19px; }
   .modal-actions { position: sticky; bottom: 0; padding: 14px 20px 18px; background: #fbfcf9; }
   .new-player-form { grid-template-columns: 1fr 64px 76px; }
   .new-player-form button { grid-column: 1 / -1; }
