@@ -438,7 +438,8 @@ function PlayersModal({ players, newPlayer, setNewPlayer, newAvatar, setNewAvata
       for (const player of changed) await onUpdate({ ...player, avatar: firstCharacter(player.avatar) });
       onClose();
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "儲存失敗，請再試一次。");
+      const detail = error instanceof Error ? error.message : "";
+      setSaveError(detail.includes("Missing or insufficient permissions") ? "資料庫權限尚未更新，請重新整理後再試一次。" : detail || "儲存失敗，請再試一次。");
     } finally {
       setSavingPlayers(false);
     }
