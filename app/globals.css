@@ -203,7 +203,7 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
 .new-player-form button { height: 42px; padding: 0 20px; color: white; background: var(--green); border: 0; border-radius: 4px; font-size: 12px; font-weight: 800; }
 .player-edit-hint { padding: 12px 28px 0; color: var(--muted); font-size: 10px; }
 .player-edit-list { padding: 4px 28px 24px; }
-.player-edit-list > div { min-height: 62px; display: grid; grid-template-columns: 38px 30px 1fr 52px auto auto; align-items: center; gap: 9px; border-bottom: 1px solid #edf0ed; }
+.player-edit-list > div { min-height: 62px; display: grid; grid-template-columns: 38px 30px 1fr 52px auto; align-items: center; gap: 9px; border-bottom: 1px solid #edf0ed; }
 .player-edit-list > div.inactive { opacity: .55; }
 .inline-avatar { width: 36px; height: 36px; padding: 0; color: white; border: 0; border-radius: 50%; text-align: center; font-size: 15px; font-weight: 800; box-shadow: 2px 2px 0 var(--yellow); }
 .inline-avatar::placeholder { color: rgba(255,255,255,.88); opacity: 1; }
@@ -212,6 +212,7 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
 .player-edit-list span { color: var(--muted); font-size: 9px; }
 .player-edit-list button { padding: 6px; color: var(--green); background: transparent; border: 0; font-size: 10px; font-weight: 800; }
 .player-edit-list .remove-player { color: var(--red); }
+.player-save-error { margin: -10px 28px 12px; color: var(--red); font-size: 11px; font-weight: 700; }
 .players-modal .modal-actions { justify-content: space-between; }
 .players-modal .modal-actions p { margin: 0; color: var(--muted); font-size: 9px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
@@ -329,7 +330,7 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
   .new-player-form button { grid-column: 1 / -1; }
   .player-edit-hint { padding-inline: 20px; }
   .player-edit-list { padding-inline: 20px; }
-  .player-edit-list > div { grid-template-columns: 36px 28px minmax(82px, 1fr) auto auto; }
+  .player-edit-list > div { grid-template-columns: 36px 28px minmax(82px, 1fr) auto; }
   .player-edit-list span { display: none; }
   .players-modal .modal-actions p { display: none; }
   .access-shell { padding: 16px; }

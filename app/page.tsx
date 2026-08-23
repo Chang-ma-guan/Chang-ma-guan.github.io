@@ -36,8 +36,9 @@ function formatDate(value: string) {
   return `${year}.${month}.${day}`;
 }
 function percentage(value: number) { return `${Math.round(value)}%`; }
+function firstCharacter(value: string) { return Array.from(value.trim())[0] ?? ""; }
 function playerAvatar(player: Pick<Player, "name" | "avatar">) {
-  return Array.from(player.avatar.trim())[0] ?? Array.from(player.name.trim())[0] ?? "?";
+  return firstCharacter(player.avatar) || firstCharacter(player.name) || "?";
 }
 
 export default function Home() {
@@ -225,6 +226,7 @@ export default function Home() {
       setMessage("成員資料已更新。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "更新失敗");
+      throw error;
     }
   }
 
@@ -331,7 +333,7 @@ export default function Home() {
       <nav className="mobile-nav" aria-label="手機選單">{navigation.map((item) => <button key={item.id} type="button" onClick={() => setView(item.id)} className={view === item.id ? "active" : ""}><i>{item.icon}</i><span>{item.label}</span></button>)}</nav>
 
       {recordOpen && <RecordModal editing={Boolean(editingId)} players={data.players} seasons={seasons} playedAt={playedAt} setPlayedAt={setPlayedAt} season={recordSeason} setSeason={setRecordSeason} rounds={rounds} setRounds={setRounds} note={note} setNote={setNote} seats={seats} setSeats={setSeats} balance={balance} valid={recordValid} saving={saving} onClose={() => setRecordOpen(false)} onSubmit={submitRecord} />}
-      {playersOpen && <PlayersModal players={data.players} newPlayer={newPlayer} setNewPlayer={setNewPlayer} newAvatar={newAvatar} setNewAvatar={setNewAvatar} newColor={newColor} setNewColor={setNewColor} onAdd={addPlayer} onUpdate={updatePlayer} onRemove={removePlayer} onClose={() => { setPlayersOpen(false); setMessage(""); }} setData={setData} />}
+      {playersOpen && <PlayersModal players={data.players} newPlayer={newPlayer} setNewPlayer={setNewPlayer} newAvatar={newAvatar} setNewAvatar={setNewAvatar} newColor={newColor} setNewColor={setNewColor} onAdd={addPlayer} onUpdate={updatePlayer} onRemove={removePlayer} onClose={() => { setPlayersOpen(false); setMessage(""); }} />}
     </main>
   );
 }
@@ -413,9 +415,34 @@ function RecordModal({ editing, players, seasons, playedAt, setPlayedAt, season,
   </form></div></div>;
 }
 
-function PlayersModal({ players, newPlayer, setNewPlayer, newAvatar, setNewAvatar, newColor, setNewColor, onAdd, onUpdate, onRemove, onClose, setData }: {
-  players: Player[]; newPlayer: string; setNewPlayer: (value: string) => void; newAvatar: string; setNewAvatar: (value: string) => void; newColor: string; setNewColor: (value: string) => void; onAdd: (event: FormEvent) => void; onUpdate: (player: Player) => void; onRemove: (player: Player) => void; onClose: () => void; setData: React.Dispatch<React.SetStateAction<LedgerData>>;
+function PlayersModal({ players, newPlayer, setNewPlayer, newAvatar, setNewAvatar, newColor, setNewColor, onAdd, onUpdate, onRemove, onClose }: {
+  players: Player[]; newPlayer: string; setNewPlayer: (value: string) => void; newAvatar: string; setNewAvatar: (value: string) => void; newColor: string; setNewColor: (value: string) => void; onAdd: (event: FormEvent) => void; onUpdate: (player: Player) => Promise<void>; onRemove: (player: Player) => void; onClose: () => void;
 }) {
-  function patchLocal(id: string, patch: Partial<Player>) { setData((current) => ({ ...current, players: current.players.map((player) => player.id === id ? { ...player, ...patch } : player) })); }
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><div className="modal players-modal" role="dialog" aria-modal="true" aria-labelledby="players-title"><header className="modal-head"><div><p>FAMILY MEMBERS</p><h2 id="players-title">管理成員</h2></div><button type="button" aria-label="關閉" onClick={onClose}>×</button></header><form className="new-player-form" onSubmit={onAdd}><label>新增成員<input value={newPlayer} onChange={(event) => setNewPlayer(event.target.value)} placeholder="輸入名字或暱稱" maxLength={12} /></label><label className="avatar-field">代表字<input value={newAvatar} onChange={(event) => setNewAvatar(Array.from(event.target.value)[0] ?? "")} placeholder={Array.from(newPlayer.trim())[0] ?? "字"} maxLength={1} aria-label="新成員代表字" /></label><label className="color-field">代表色<input type="color" value={newColor} onChange={(event) => setNewColor(event.target.value)} /></label><button type="submit">＋ 加入</button></form><div className="player-edit-hint">點圓圈可修改顯示的代表字</div><div className="player-edit-list">{players.map((player) => <div key={player.id} className={!player.active ? "inactive" : ""}><input className="inline-avatar" style={{ background: player.color }} value={player.avatar} onChange={(event) => patchLocal(player.id, { avatar: Array.from(event.target.value)[0] ?? "" })} placeholder={Array.from(player.name.trim())[0] ?? "?"} maxLength={1} aria-label={`${player.name}代表字`} /><input className="inline-color" type="color" value={player.color} onChange={(event) => patchLocal(player.id, { color: event.target.value })} aria-label={`${player.name}代表色`} /><input className="inline-name" value={player.name} onChange={(event) => patchLocal(player.id, { name: event.target.value })} aria-label={`${player.name}名稱`} /><span>{player.active ? "使用中" : "已停用"}</span><button type="button" onClick={() => onUpdate(player)}>儲存</button><button type="button" className="remove-player" onClick={() => onRemove(player)}>{player.active ? "移除" : "刪除"}</button></div>)}</div><footer className="modal-actions"><p>已有對局紀錄的成員，移除後會保留過去統計。</p><button className="save-button" type="button" onClick={onClose}>完成</button></footer></div></div>;
+  const [drafts, setDrafts] = useState<Record<string, Player>>(() => Object.fromEntries(players.map((player) => [player.id, { ...player }])));
+  const [savingPlayers, setSavingPlayers] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const editablePlayers = players.map((player) => drafts[player.id] ?? player);
+
+  function patchDraft(id: string, patch: Partial<Player>) {
+    setDrafts((current) => ({ ...current, [id]: { ...(current[id] ?? players.find((player) => player.id === id)!), ...patch } }));
+  }
+
+  async function saveAndClose() {
+    setSavingPlayers(true);
+    setSaveError("");
+    try {
+      const changed = editablePlayers.filter((player) => {
+        const saved = players.find((item) => item.id === player.id);
+        return saved && (player.name.trim() !== saved.name || firstCharacter(player.avatar) !== firstCharacter(saved.avatar) || player.color !== saved.color);
+      });
+      for (const player of changed) await onUpdate({ ...player, avatar: firstCharacter(player.avatar) });
+      onClose();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "儲存失敗，請再試一次。");
+    } finally {
+      setSavingPlayers(false);
+    }
+  }
+
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><div className="modal players-modal" role="dialog" aria-modal="true" aria-labelledby="players-title"><header className="modal-head"><div><p>FAMILY MEMBERS</p><h2 id="players-title">管理成員</h2></div><button type="button" aria-label="關閉" onClick={onClose}>×</button></header><form className="new-player-form" onSubmit={onAdd}><label>新增成員<input value={newPlayer} onChange={(event) => setNewPlayer(event.target.value)} placeholder="輸入名字或暱稱" maxLength={12} /></label><label className="avatar-field">代表字<input value={newAvatar} onChange={(event) => setNewAvatar(event.target.value)} onCompositionEnd={(event) => setNewAvatar(firstCharacter(event.currentTarget.value))} onBlur={(event) => setNewAvatar(firstCharacter(event.currentTarget.value))} placeholder={firstCharacter(newPlayer) || "字"} aria-label="新成員代表字" /></label><label className="color-field">代表色<input type="color" value={newColor} onChange={(event) => setNewColor(event.target.value)} /></label><button type="submit">＋ 加入</button></form><div className="player-edit-hint">點圓圈可修改顯示的代表字，修改完成後按下方「儲存並完成」</div><div className="player-edit-list">{editablePlayers.map((player) => <div key={player.id} className={!player.active ? "inactive" : ""}><input className="inline-avatar" style={{ background: player.color }} value={player.avatar} onChange={(event) => patchDraft(player.id, { avatar: event.target.value })} onCompositionEnd={(event) => patchDraft(player.id, { avatar: firstCharacter(event.currentTarget.value) })} onBlur={(event) => patchDraft(player.id, { avatar: firstCharacter(event.currentTarget.value) })} placeholder={firstCharacter(player.name) || "?"} aria-label={`${player.name}代表字`} /><input className="inline-color" type="color" value={player.color} onChange={(event) => patchDraft(player.id, { color: event.target.value })} aria-label={`${player.name}代表色`} /><input className="inline-name" value={player.name} onChange={(event) => patchDraft(player.id, { name: event.target.value })} aria-label={`${player.name}名稱`} /><span>{player.active ? "使用中" : "已停用"}</span><button type="button" className="remove-player" onClick={() => onRemove(player)}>{player.active ? "移除" : "刪除"}</button></div>)}</div>{saveError && <p className="player-save-error" role="alert">{saveError}</p>}<footer className="modal-actions"><p>代表字、顏色與名稱會一次儲存。</p><button className="save-button" type="button" disabled={savingPlayers} onClick={() => void saveAndClose()}>{savingPlayers ? "儲存中…" : "儲存並完成"}</button></footer></div></div>;
 }
