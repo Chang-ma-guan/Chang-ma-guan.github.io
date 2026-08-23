@@ -22,19 +22,22 @@ type View = "overview" | "records" | "players";
 type PlayerStats = {
   player: Player;
   games: number;
+  decisiveGames: number;
   rounds: number;
   winningGames: number;
   losingGames: number;
-  drawGames: number;
   grossWin: number;
   grossLoss: number;
   net: number;
   winRate: number;
+  averageWin: number;
+  averageLoss: number;
   average: number;
   averagePerRound: number;
   best: number;
   worst: number;
   selfDraws: number;
+  selfDrawsPerGame: number;
   dealsIn: number;
   dealsInPerGame: number;
   recentNet: number;
@@ -61,11 +64,10 @@ function decimal(value: number) { return value.toFixed(1); }
 function selectNumber(event: FocusEvent<HTMLInputElement>) { event.currentTarget.select(); }
 function streakLabel(amounts: number[]) {
   if (!amounts.length) return "—";
-  if (amounts[0] === 0) return "目前平手";
-  const positive = amounts[0] > 0;
+  const positive = amounts[0] >= 0;
   let count = 0;
   for (const amount of amounts) {
-    if ((positive && amount > 0) || (!positive && amount < 0)) count += 1;
+    if ((positive && amount >= 0) || (!positive && amount < 0)) count += 1;
     else break;
   }
   return `${positive ? "連勝" : "連敗"} ${count} 場`;
@@ -137,32 +139,35 @@ export default function Home() {
       const orderedEntries = filteredSessions.map((session) => entries.find((entry) => entry.sessionId === session.id)).filter((entry): entry is GameResult => Boolean(entry));
       const amounts = entries.map((item) => item.amount);
       const net = amounts.reduce((sum, amount) => sum + amount, 0);
-      const winningGames = amounts.filter((amount) => amount > 0).length;
+      const winningGames = amounts.filter((amount) => amount >= 0).length;
       const losingGames = amounts.filter((amount) => amount < 0).length;
-      const drawGames = amounts.filter((amount) => amount === 0).length;
       const grossWin = amounts.filter((amount) => amount > 0).reduce((sum, amount) => sum + amount, 0);
       const grossLoss = Math.abs(amounts.filter((amount) => amount < 0).reduce((sum, amount) => sum + amount, 0));
+      const decisiveGames = winningGames + losingGames;
       const rounds = entries.reduce((sum, item) => sum + (roundsBySession.get(item.sessionId) ?? 0), 0);
       const selfDraws = entries.reduce((sum, item) => sum + item.selfDraws, 0);
       const dealsIn = entries.reduce((sum, item) => sum + item.dealsIn, 0);
       return {
         player,
         games: entries.length,
+        decisiveGames,
         rounds,
         winningGames,
         losingGames,
-        drawGames,
         grossWin,
         grossLoss,
         net,
-        winRate: entries.length ? (winningGames / entries.length) * 100 : 0,
+        winRate: decisiveGames ? (winningGames / decisiveGames) * 100 : 0,
+        averageWin: winningGames ? Math.round(grossWin / winningGames) : 0,
+        averageLoss: losingGames ? Math.round(grossLoss / losingGames) : 0,
         average: entries.length ? Math.round(net / entries.length) : 0,
         averagePerRound: rounds ? Math.round(net / rounds) : 0,
         best: amounts.length ? Math.max(...amounts) : 0,
         worst: amounts.length ? Math.min(...amounts) : 0,
         selfDraws,
+        selfDrawsPerGame: decisiveGames ? selfDraws / decisiveGames : 0,
         dealsIn,
-        dealsInPerGame: entries.length ? dealsIn / entries.length : 0,
+        dealsInPerGame: decisiveGames ? dealsIn / decisiveGames : 0,
         recentNet: orderedEntries.slice(0, 5).reduce((sum, item) => sum + item.amount, 0),
         streak: streakLabel(orderedEntries.map((item) => item.amount)),
       };
@@ -176,7 +181,21 @@ export default function Home() {
   const totalRounds = filteredSessions.reduce((sum, item) => sum + item.rounds, 0);
   const totalWinningRecords = stats.reduce((sum, item) => sum + item.winningGames, 0);
   const totalLosingRecords = stats.reduce((sum, item) => sum + item.losingGames, 0);
-  const leader = stats[0];
+  const leader = stats.find((item) => item.games > 0);
+  const dealsInKing = stats.filter((item) => item.dealsIn > 0).reduce<PlayerStats | null>((best, item) => !best || item.dealsInPerGame > best.dealsInPerGame ? item : best, null);
+  const selfDrawKing = stats.filter((item) => item.selfDraws > 0).reduce<PlayerStats | null>((best, item) => !best || item.selfDrawsPerGame > best.selfDrawsPerGame ? item : best, null);
+  const killer = stats.filter((item) => item.grossWin > 0).reduce<PlayerStats | null>((best, item) => !best || item.averageWin > best.averageWin ? item : best, null);
+  const shareholder = stats.filter((item) => item.losingGames > 0).reduce<PlayerStats | null>((best, item) => !best || item.averageLoss > best.averageLoss ? item : best, null);
+  const brightestResult = filteredResults.filter((item) => item.amount > 0).reduce<GameResult | null>((best, item) => !best || item.amount > best.amount ? item : best, null);
+  const brightestPlayer = brightestResult ? data.players.find((item) => item.id === brightestResult.playerId) : null;
+  const brightestSession = brightestResult ? filteredSessions.find((item) => item.id === brightestResult.sessionId) : null;
+  const overviewAwards = [
+    { title: "放槍王", mark: "槍", player: dealsInKing?.player, value: dealsInKing ? `${decimal(dealsInKing.dealsInPerGame)} 次` : "—", hint: "平均放槍數最高" },
+    { title: "自摸王", mark: "摸", player: selfDrawKing?.player, value: selfDrawKing ? `${decimal(selfDrawKing.selfDrawsPerGame)} 次` : "—", hint: "平均自摸數最高" },
+    { title: "殺王", mark: "殺", player: killer?.player, value: killer ? formatMoney(killer.averageWin, false) : "—", hint: "平均單場贏最多" },
+    { title: "大股東", mark: "股", player: shareholder?.player, value: shareholder ? `-$${shareholder.averageLoss.toLocaleString("zh-TW")}` : "—", hint: "平均單場輸最多" },
+    { title: "本季最耀眼", mark: "耀", player: brightestPlayer, value: brightestResult ? formatMoney(brightestResult.amount) : "—", hint: brightestSession ? `${formatDate(brightestSession.playedAt)} 單場最高` : "等待第一場勝局" },
+  ];
   const maxBar = Math.max(1, ...stats.map((item) => Math.abs(item.net)));
   const allParticipations = stats.reduce((sum, item) => sum + item.games, 0);
   const ringBackground = stats.length
@@ -187,12 +206,15 @@ export default function Home() {
       }).join(", ")})`
     : "#e5e8e2";
   const detailFacts = focused ? [
-    { label: "贏 / 輸 / 和", value: `${focused.winningGames} / ${focused.losingGames} / ${focused.drawGames}` },
-    { label: "總贏金額", value: formatMoney(focused.grossWin, false), tone: "money-up" },
-    { label: "總輸金額", value: focused.grossLoss ? `-$${focused.grossLoss.toLocaleString("zh-TW")}` : "$0", tone: focused.grossLoss ? "money-down" : "" },
-    { label: "參戰將數", value: `${focused.rounds} 將` },
-    { label: "平均每將", value: formatMoney(focused.averagePerRound) },
-    { label: "近五場", value: formatMoney(focused.recentNet), tone: focused.recentNet >= 0 ? "money-up" : "money-down" },
+    { label: "贏錢場次", value: `${focused.winningGames} 場`, tone: "money-up" },
+    { label: "贏錢總額", value: formatMoney(focused.grossWin, false), tone: "money-up" },
+    { label: "輸錢場次", value: `${focused.losingGames} 場`, tone: "money-down" },
+    { label: "輸錢總額", value: focused.grossLoss ? `-$${focused.grossLoss.toLocaleString("zh-TW")}` : "$0", tone: focused.grossLoss ? "money-down" : "" },
+    { label: "勝率", value: percentage(focused.winRate) },
+    { label: "平均單場贏", value: formatMoney(focused.averageWin, false), tone: "money-up" },
+    { label: "平均單場輸", value: focused.averageLoss ? `-$${focused.averageLoss.toLocaleString("zh-TW")}` : "$0", tone: focused.averageLoss ? "money-down" : "" },
+    { label: "平均自摸數", value: `${decimal(focused.selfDrawsPerGame)} 次` },
+    { label: "平均放槍數", value: `${decimal(focused.dealsInPerGame)} 次` },
   ] : [
     { label: "累積將數", value: `${totalRounds} 將` },
     { label: "贏錢人次", value: `${totalWinningRecords} 次`, tone: "money-up" },
@@ -371,12 +393,21 @@ export default function Home() {
             <>
               <section className="metric-grid" aria-label="主要統計">
                 <Metric label={focused ? `${focused.player.name} 淨輸贏` : "總對局數"} value={focused ? formatMoney(focused.net) : `${filteredSessions.length}`} unit={focused ? "" : "場"} tone={focused && focused.net < 0 ? "red" : "green"} hint={focused ? `${focused.games} 場紀錄` : `${season} · ${data.players.filter((player) => player.active).length} 位成員`} />
-                <Metric label={focused ? "勝率" : "本季手氣王"} value={focused ? percentage(focused.winRate) : leader?.player.name ?? "—"} unit="" tone="dark" hint={focused ? `贏錢 ${Math.round(focused.games * focused.winRate / 100)} 場` : leader ? formatMoney(leader.net) : "還沒有對局"} />
+                <Metric label={focused ? "勝率" : "本季手氣王"} value={focused ? percentage(focused.winRate) : leader?.player.name ?? "—"} unit="" tone="dark" hint={focused ? `贏錢 ${focused.winningGames} 場／輸錢 ${focused.losingGames} 場` : leader ? formatMoney(leader.net) : "還沒有對局"} />
                 <Metric label={focused ? "平均每場" : "正向金流"} value={focused ? formatMoney(focused.average) : `$${totalTurnover.toLocaleString("zh-TW")}`} unit="" tone="cream" hint={focused ? `單場最佳 ${formatMoney(focused.best)}` : "所有贏家金額加總"} />
-                <Metric label={focused ? "自摸 / 放槍" : "累積自摸數"} value={focused ? `${focused.selfDraws} / ${focused.dealsIn}` : `${totalSelfDraws}`} unit="次" tone="yellow" hint={focused ? `平均每場放槍 ${decimal(focused.dealsInPerGame)} 次` : `${totalDealsIn} 次放槍`} />
+                <Metric label={focused ? "自摸 / 放槍" : "累積自摸數"} value={focused ? `${focused.selfDraws} / ${focused.dealsIn}` : `${totalSelfDraws}`} unit="次" tone="yellow" hint={focused ? `平均 ${decimal(focused.selfDrawsPerGame)}／${decimal(focused.dealsInPerGame)} 次` : `${totalDealsIn} 次放槍`} />
               </section>
               <section className="quick-stat-grid" aria-label={focused ? `${focused.player.name}詳細統計` : "牌局詳細統計"}>
                 {detailFacts.map((fact) => <article key={fact.label}><span>{fact.label}</span><strong className={fact.tone}>{fact.value}</strong></article>)}
+              </section>
+
+              <section className="award-panel" aria-label="牌桌風雲榜">
+                <div className="award-heading"><div><span>TABLE TITLES</span><h2>牌桌風雲榜</h2></div><p>依目前選擇的統計區間計算</p></div>
+                <div className="award-grid">{overviewAwards.map((award) => <article className={award.title === "本季最耀眼" ? "award-card featured" : "award-card"} key={award.title}>
+                  <span className="award-mark" style={{ background: award.player?.color ?? "#a5aea9" }}>{award.mark}</span>
+                  <div><small>{award.title}</small><strong>{award.player?.name ?? "尚無資料"}</strong><p>{award.hint}</p></div>
+                  <b>{award.value}</b>
+                </article>)}</div>
               </section>
 
               <section className="dashboard-grid">
@@ -480,36 +511,46 @@ function RecordTable({ sessions, results, players, onEdit, onDelete }: { session
 function PlayersView({ stats, maxBar, onManage }: { stats: PlayerStats[]; maxBar: number; onManage: () => void }) {
   const comparisonRows: { label: string; value: (row: PlayerStats) => string; tone?: (row: PlayerStats) => string }[] = [
     { label: "淨輸贏", value: (row) => formatMoney(row.net), tone: (row) => row.net >= 0 ? "money-up" : "money-down" },
-    { label: "總贏 / 總輸", value: (row) => `${formatMoney(row.grossWin, false)} / ${row.grossLoss ? `-$${row.grossLoss.toLocaleString("zh-TW")}` : "$0"}` },
-    { label: "贏 / 輸 / 和", value: (row) => `${row.winningGames} / ${row.losingGames} / ${row.drawGames}` },
+    { label: "贏錢場次", value: (row) => `${row.winningGames} 場` },
+    { label: "贏錢總額", value: (row) => formatMoney(row.grossWin, false), tone: () => "money-up" },
+    { label: "輸錢場次", value: (row) => `${row.losingGames} 場` },
+    { label: "輸錢總額", value: (row) => row.grossLoss ? `-$${row.grossLoss.toLocaleString("zh-TW")}` : "$0", tone: (row) => row.grossLoss ? "money-down" : "" },
     { label: "勝率", value: (row) => percentage(row.winRate) },
+    { label: "平均單場贏", value: (row) => formatMoney(row.averageWin, false), tone: () => "money-up" },
+    { label: "平均單場輸", value: (row) => row.averageLoss ? `-$${row.averageLoss.toLocaleString("zh-TW")}` : "$0", tone: (row) => row.averageLoss ? "money-down" : "" },
+    { label: "平均自摸數", value: (row) => decimal(row.selfDrawsPerGame) },
+    { label: "平均放槍數", value: (row) => decimal(row.dealsInPerGame) },
     { label: "平均每場", value: (row) => formatMoney(row.average) },
     { label: "平均每將", value: (row) => formatMoney(row.averagePerRound) },
     { label: "最佳 / 最差", value: (row) => `${formatMoney(row.best)} / ${formatMoney(row.worst)}` },
     { label: "場數 / 將數", value: (row) => `${row.games} 場 / ${row.rounds} 將` },
-    { label: "自摸 / 放槍", value: (row) => `${row.selfDraws} / ${row.dealsIn}` },
-    { label: "平均每場放槍", value: (row) => decimal(row.dealsInPerGame) },
+    { label: "自摸 / 放槍總數", value: (row) => `${row.selfDraws} / ${row.dealsIn}` },
     { label: "近五場", value: (row) => formatMoney(row.recentNet), tone: (row) => row.recentNet >= 0 ? "money-up" : "money-down" },
     { label: "目前近況", value: (row) => row.streak },
   ];
 
   return <>
-    <div className="players-view-head"><p>完整統計總贏、總輸、勝率、每場與每將平均，以及自摸與放槍表現。</p><button type="button" onClick={onManage}>管理成員 →</button></div>
+    <div className="players-view-head"><p>金額為 0 也算勝場；勝率與所有平均皆以勝場加輸場計算。</p><button type="button" onClick={onManage}>管理成員 →</button></div>
     <section className="player-card-grid">{stats.map((row, index) => <article className="player-stat-card" key={row.player.id}>
       <header><span className="player-avatar" style={{ background: row.player.color }}>{playerAvatar(row.player)}</span><div><small>RANK {String(index + 1).padStart(2, "0")}</small><h2>{row.player.name}</h2></div><strong className={row.net >= 0 ? "money-up" : "money-down"}>{formatMoney(row.net)}</strong></header>
       <div className="player-main-bar"><i className={row.net >= 0 ? "positive" : "negative"} style={{ width: `${Math.max(4, Math.abs(row.net) / maxBar * 100)}%` }} /></div>
       <dl>
         <div><dt>參戰</dt><dd>{row.games} 場 / {row.rounds} 將</dd></div>
-        <div><dt>贏 / 輸 / 和</dt><dd>{row.winningGames} / {row.losingGames} / {row.drawGames}</dd></div>
+        <div><dt>贏錢場次</dt><dd>{row.winningGames} 場</dd></div>
+        <div><dt>輸錢場次</dt><dd>{row.losingGames} 場</dd></div>
         <div><dt>勝率</dt><dd>{percentage(row.winRate)}</dd></div>
-        <div><dt>總贏金額</dt><dd className="money-up">{formatMoney(row.grossWin, false)}</dd></div>
-        <div><dt>總輸金額</dt><dd className={row.grossLoss ? "money-down" : ""}>{row.grossLoss ? `-$${row.grossLoss.toLocaleString("zh-TW")}` : "$0"}</dd></div>
+        <div><dt>贏錢總額</dt><dd className="money-up">{formatMoney(row.grossWin, false)}</dd></div>
+        <div><dt>輸錢總額</dt><dd className={row.grossLoss ? "money-down" : ""}>{row.grossLoss ? `-$${row.grossLoss.toLocaleString("zh-TW")}` : "$0"}</dd></div>
+        <div><dt>平均單場贏</dt><dd className="money-up">{formatMoney(row.averageWin, false)}</dd></div>
+        <div><dt>平均單場輸</dt><dd className={row.averageLoss ? "money-down" : ""}>{row.averageLoss ? `-$${row.averageLoss.toLocaleString("zh-TW")}` : "$0"}</dd></div>
+        <div><dt>平均自摸數</dt><dd>{decimal(row.selfDrawsPerGame)}</dd></div>
+        <div><dt>平均放槍數</dt><dd>{decimal(row.dealsInPerGame)}</dd></div>
         <div><dt>平均每場</dt><dd>{formatMoney(row.average)}</dd></div>
         <div><dt>平均每將</dt><dd>{formatMoney(row.averagePerRound)}</dd></div>
         <div><dt>最佳單場</dt><dd className={row.best >= 0 ? "money-up" : "money-down"}>{formatMoney(row.best)}</dd></div>
         <div><dt>最差單場</dt><dd className={row.worst >= 0 ? "money-up" : "money-down"}>{formatMoney(row.worst)}</dd></div>
         <div><dt>自摸總數</dt><dd>{row.selfDraws}</dd></div>
-        <div><dt>放槍 / 每場</dt><dd>{row.dealsIn} / {decimal(row.dealsInPerGame)}</dd></div>
+        <div><dt>放槍總數</dt><dd>{row.dealsIn}</dd></div>
         <div><dt>近五場</dt><dd className={row.recentNet >= 0 ? "money-up" : "money-down"}>{formatMoney(row.recentNet)}</dd></div>
         <div><dt>目前近況</dt><dd>{row.streak}</dd></div>
       </dl>
