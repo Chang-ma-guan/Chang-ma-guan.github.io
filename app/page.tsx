@@ -45,8 +45,8 @@ const playerColors = ["#167c5a", "#e6533f", "#e7ae35", "#5266bd", "#bd477b", "#6
 const emptyData: LedgerData = { players: [], sessions: [], results: [] };
 
 function today() { return new Date().toISOString().slice(0, 10); }
-function freshSeats(players: Player[]): SeatInput[] {
-  return Array.from({ length: 4 }, (_, index) => ({ playerId: players.filter((player) => player.active)[index]?.id ?? "", amount: "", wins: "0", selfDraws: "", dealsIn: "" }));
+function freshSeats(): SeatInput[] {
+  return Array.from({ length: 4 }, () => ({ playerId: "", amount: "", wins: "0", selfDraws: "", dealsIn: "" }));
 }
 function formatMoney(value: number, showPlus = true) {
   const sign = value > 0 && showPlus ? "+" : value < 0 ? "-" : "";
@@ -94,7 +94,7 @@ export default function Home() {
   const [recordSeason, setRecordSeason] = useState("本季");
   const [rounds, setRounds] = useState("1");
   const [note, setNote] = useState("");
-  const [seats, setSeats] = useState<SeatInput[]>(freshSeats([]));
+  const [seats, setSeats] = useState<SeatInput[]>(freshSeats());
   const [newPlayer, setNewPlayer] = useState("");
   const [newAvatar, setNewAvatar] = useState("");
   const [newColor, setNewColor] = useState(playerColors[0]);
@@ -208,9 +208,9 @@ export default function Home() {
     setRecordSeason(seasons[0] ?? "本季");
     setRounds("1");
     setNote("");
-    setSeats(freshSeats(data.players));
+    setSeats(freshSeats());
     setMessage("");
-  }, [data.players, seasons]);
+  }, [seasons]);
 
   function openNewRecord() {
     resetRecordForm();
