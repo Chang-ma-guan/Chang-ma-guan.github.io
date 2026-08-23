@@ -74,6 +74,10 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .metric-value strong { font: 800 clamp(30px, 3vw, 42px)/1 "Noto Serif TC", serif; letter-spacing: -.04em; }
 .metric-value span { font-size: 13px; font-weight: 800; }
 .metric-card p { margin: 0; font-size: 11px; opacity: .6; }
+.quick-stat-grid { margin-top: 12px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.quick-stat-grid article { min-width: 0; padding: 15px 16px; display: flex; flex-direction: column; gap: 7px; background: white; border: 1px solid var(--line); border-radius: 6px; }
+.quick-stat-grid span { color: var(--muted); font-size: 9px; font-weight: 800; }
+.quick-stat-grid strong { overflow: hidden; font-size: 14px; white-space: nowrap; text-overflow: ellipsis; }
 
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, .75fr); gap: 18px; margin-top: 18px; }
 .panel { background: white; border: 1px solid var(--line); border-radius: 7px; }
@@ -145,10 +149,18 @@ td:first-child small { margin-top: 6px; color: #89958f; font-size: 9px; }
 .player-stat-card h2 { margin: 4px 0 0; font: 800 21px/1.2 "Noto Serif TC", serif; }
 .player-stat-card header > strong { font: 800 21px/1 serif; }
 .player-main-bar { margin: 22px 0; }
-.player-stat-card dl { margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.player-stat-card dl { margin: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px 14px; }
 .player-stat-card dl div { display: flex; flex-direction: column; gap: 6px; }
 .player-stat-card dt { color: #8a9690; font-size: 9px; }
-.player-stat-card dd { margin: 0; font-size: 13px; font-weight: 800; }
+.player-stat-card dd { margin: 0; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.stats-comparison-panel { margin-top: 18px; overflow: hidden; }
+.stats-comparison-wrap { overflow-x: auto; overscroll-behavior-inline: contain; }
+.stats-comparison th, .stats-comparison td { min-width: 128px; padding: 13px 14px; text-align: center; white-space: nowrap; }
+.stats-comparison th:first-child { width: 150px; min-width: 150px; position: sticky; left: 0; z-index: 2; text-align: left; background: #f4f7f4; }
+.stats-comparison thead th:first-child { z-index: 3; }
+.stats-comparison tbody tr:nth-child(even) td { background: #fafbfa; }
+.compare-player { display: inline-flex; align-items: center; justify-content: center; gap: 7px; color: var(--ink); font-size: 11px; letter-spacing: 0; }
+.compare-player i { width: 26px; height: 26px; display: grid; place-items: center; color: white; border-radius: 50%; font-style: normal; font-size: 10px; }
 
 .onboarding { min-height: 550px; padding: 70px 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: white; border: 1px solid var(--line); border-radius: 8px; }
 .onboarding-art { height: 95px; display: flex; align-items: flex-end; gap: 7px; margin-bottom: 32px; }
@@ -253,6 +265,7 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
   .sidebar { padding-inline: 18px; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .metric-card { min-height: 160px; }
+  .quick-stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .dashboard-grid { grid-template-columns: 1fr; }
   .participation-panel { display: grid; grid-template-columns: 1fr 1fr; }
   .participation-panel .panel-head { grid-column: 1 / -1; }
@@ -303,7 +316,7 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
   .rank-name strong { font-size: 12px; }
   .participation-panel { display: block; }
   .donut-legend { padding: 0 28px; }
-  th:nth-child(3), th:nth-child(4), td:nth-child(3), td:nth-child(4) { display: none; }
+  .records-panel th:nth-child(3), .records-panel th:nth-child(4), .records-panel td:nth-child(3), .records-panel td:nth-child(4) { display: none; }
   td { padding: 15px 12px; }
   td:first-child { width: 108px; }
   .result-pills { min-width: 230px; }
@@ -313,7 +326,12 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
   .player-stat-card header { grid-template-columns: 44px 1fr auto; }
   .player-avatar { width: 42px; height: 42px; }
   .player-stat-card header > strong { font-size: 17px; }
+  .quick-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quick-stat-grid article { padding: 13px 14px; }
   .player-stat-card dl { grid-template-columns: repeat(2, 1fr); }
+  .stats-comparison-panel .panel-head { min-height: 72px; }
+  .stats-comparison th, .stats-comparison td { min-width: 116px; padding: 12px 10px; }
+  .stats-comparison th:first-child { width: 118px; min-width: 118px; }
   .modal-backdrop { padding: 0; align-items: end; }
   .modal { width: 100%; max-height: 94vh; max-height: 94dvh; border-radius: 12px 12px 0 0; }
   .modal-head { min-height: 82px; padding: 18px 20px; }
