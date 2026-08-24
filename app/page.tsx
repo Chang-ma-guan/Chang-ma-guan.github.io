@@ -84,6 +84,11 @@ function firstCharacter(value: string) { return Array.from(value.trim())[0] ?? "
 function playerAvatar(player: Pick<Player, "name" | "avatar">) {
   return firstCharacter(player.avatar) || firstCharacter(player.name) || "?";
 }
+function tiedLeaders(rows: PlayerStats[], score: (row: PlayerStats) => number, lowest = false) {
+  if (!rows.length) return [];
+  const target = (lowest ? Math.min : Math.max)(...rows.map(score));
+  return rows.filter((row) => Math.abs(score(row) - target) < 0.000001);
+}
 
 export default function Home() {
   const [data, setData] = useState<LedgerData>(emptyData);
@@ -202,26 +207,28 @@ export default function Home() {
   const allTimeFundAdjustment = data.adjustments.reduce((sum, item) => sum + item.amount, 0);
   const allTimeFundBalance = data.openingBalance + allTimeFundIncome - allTimeFundSpending + allTimeFundAdjustment;
   const leader = stats.find((item) => item.games > 0);
-  const dealsInKing = stats.filter((item) => item.dealsIn > 0).reduce<PlayerStats | null>((best, item) => !best || item.dealsInPerGame > best.dealsInPerGame ? item : best, null);
-  const selfDrawKing = stats.filter((item) => item.selfDraws > 0).reduce<PlayerStats | null>((best, item) => !best || item.selfDrawsPerGame > best.selfDrawsPerGame ? item : best, null);
-  const killer = stats.filter((item) => item.grossWin > 0).reduce<PlayerStats | null>((best, item) => !best || item.averageWin > best.averageWin ? item : best, null);
-  const comfortProvider = stats.filter((item) => item.losingGames > 0).reduce<PlayerStats | null>((best, item) => !best || item.averageLoss > best.averageLoss ? item : best, null);
-  const shareholder = stats.filter((item) => item.grossLoss > 0).reduce<PlayerStats | null>((best, item) => !best || item.grossLoss > best.grossLoss ? item : best, null);
+  const dealsInKings = tiedLeaders(stats.filter((item) => item.dealsIn > 0), (item) => Number(item.dealsInPerGame.toFixed(1)));
+  const selfDrawKings = tiedLeaders(stats.filter((item) => item.selfDraws > 0), (item) => Number(item.selfDrawsPerGame.toFixed(1)));
+  const killers = tiedLeaders(stats.filter((item) => item.grossWin > 0), (item) => item.averageWin);
+  const comfortProviders = tiedLeaders(stats.filter((item) => item.losingGames > 0), (item) => item.averageLoss);
+  const shareholders = tiedLeaders(stats.filter((item) => item.grossLoss > 0), (item) => item.grossLoss);
   const activeStats = stats.filter((item) => item.player.active);
-  const soulPlayer = activeStats.reduce<PlayerStats | null>((best, item) => !best || item.games > best.games ? item : best, null);
-  const timidPlayer = activeStats.reduce<PlayerStats | null>((best, item) => !best || item.games < best.games ? item : best, null);
-  const brightestResult = filteredResults.filter((item) => item.amount > 0).reduce<GameResult | null>((best, item) => !best || item.amount > best.amount ? item : best, null);
-  const brightestPlayer = brightestResult ? data.players.find((item) => item.id === brightestResult.playerId) : null;
-  const brightestSession = brightestResult ? filteredSessions.find((item) => item.id === brightestResult.sessionId) : null;
+  const soulPlayers = tiedLeaders(activeStats, (item) => item.games);
+  const timidPlayers = tiedLeaders(activeStats, (item) => item.games, true);
+  const brightestAmount = Math.max(0, ...filteredResults.map((item) => item.amount));
+  const brightestResults = brightestAmount > 0 ? filteredResults.filter((item) => item.amount === brightestAmount) : [];
+  const brightestPlayerIds = new Set(brightestResults.map((item) => item.playerId));
+  const brightestPlayers = data.players.filter((item) => brightestPlayerIds.has(item.id));
+  const brightestSession = brightestResults.length === 1 ? filteredSessions.find((item) => item.id === brightestResults[0].sessionId) : null;
   const overviewAwards = [
-    { title: "放槍王", mark: "槍", player: dealsInKing?.player, value: dealsInKing ? `${decimal(dealsInKing.dealsInPerGame)} 次` : "—", hint: "平均放槍數最高" },
-    { title: "自摸王", mark: "摸", player: selfDrawKing?.player, value: selfDrawKing ? `${decimal(selfDrawKing.selfDrawsPerGame)} 次` : "—", hint: "平均自摸數最高" },
-    { title: "殺王", mark: "殺", player: killer?.player, value: killer ? formatMoney(killer.averageWin, false) : "—", hint: "平均單場贏最多" },
-    { title: "有你就舒服", mark: "舒", player: comfortProvider?.player, value: comfortProvider ? `-$${comfortProvider.averageLoss.toLocaleString("zh-TW")}` : "—", hint: "平均單場輸最多" },
-    { title: "大股東", mark: "股", player: shareholder?.player, value: shareholder ? `-$${shareholder.grossLoss.toLocaleString("zh-TW")}` : "—", hint: "輸錢總額／繳基金最多" },
-    { title: "張家靈魂人物", mark: "靈", player: soulPlayer?.player, value: soulPlayer ? `${soulPlayer.games} 場` : "—", hint: "參與場次最多" },
-    { title: "小孬孬", mark: "孬", player: timidPlayer?.player, value: timidPlayer ? `${timidPlayer.games} 場` : "—", hint: "參與場次最少" },
-    { title: "本季最耀眼", mark: "耀", player: brightestPlayer, value: brightestResult ? formatMoney(brightestResult.amount) : "—", hint: brightestSession ? `${formatDate(brightestSession.playedAt)} 單場最高` : "等待第一場勝局" },
+    { title: "放槍王", mark: "槍", players: dealsInKings.map((item) => item.player), value: dealsInKings.length ? `${decimal(dealsInKings[0].dealsInPerGame)} 次` : "—", hint: "平均放槍數最高" },
+    { title: "自摸王", mark: "摸", players: selfDrawKings.map((item) => item.player), value: selfDrawKings.length ? `${decimal(selfDrawKings[0].selfDrawsPerGame)} 次` : "—", hint: "平均自摸數最高" },
+    { title: "殺王", mark: "殺", players: killers.map((item) => item.player), value: killers.length ? formatMoney(killers[0].averageWin, false) : "—", hint: "平均單場贏最多" },
+    { title: "有你就舒服", mark: "舒", players: comfortProviders.map((item) => item.player), value: comfortProviders.length ? `-$${comfortProviders[0].averageLoss.toLocaleString("zh-TW")}` : "—", hint: "平均單場輸最多" },
+    { title: "大股東", mark: "股", players: shareholders.map((item) => item.player), value: shareholders.length ? `-$${shareholders[0].grossLoss.toLocaleString("zh-TW")}` : "—", hint: "輸錢總額／繳基金最多" },
+    { title: "張家靈魂人物", mark: "靈", players: soulPlayers.map((item) => item.player), value: soulPlayers.length ? `${soulPlayers[0].games} 場` : "—", hint: "參與場次最多" },
+    { title: "小孬孬", mark: "孬", players: timidPlayers.map((item) => item.player), value: timidPlayers.length ? `${timidPlayers[0].games} 場` : "—", hint: "參與場次最少" },
+    { title: "本季最耀眼", mark: "耀", players: brightestPlayers, value: brightestAmount ? formatMoney(brightestAmount) : "—", hint: brightestSession ? `${formatDate(brightestSession.playedAt)} 單場最高` : brightestPlayers.length > 1 ? "多人並列單場最高" : brightestResults.length > 1 ? "多場並列單場最高" : "等待第一場勝局" },
   ];
   const maxBar = Math.max(1, ...stats.map((item) => Math.abs(item.net)));
   const allParticipations = stats.reduce((sum, item) => sum + item.games, 0);
@@ -489,9 +496,9 @@ export default function Home() {
 
               <section className="award-panel" aria-label="牌桌風雲榜">
                 <div className="award-heading"><div><span>TABLE TITLES</span><h2>牌桌風雲榜</h2></div><p>依目前選擇的統計區間計算</p></div>
-                <div className="award-grid">{overviewAwards.map((award) => <article className={award.title === "本季最耀眼" ? "award-card featured" : "award-card"} key={award.title}>
-                  <span className="award-mark" style={{ background: award.player?.color ?? "#a5aea9" }}>{award.mark}</span>
-                  <div><small>{award.title}</small><strong>{award.player?.name ?? "尚無資料"}</strong><p>{award.hint}</p></div>
+                <div className="award-grid">{overviewAwards.map((award, awardIndex) => <article className={`${award.title === "本季最耀眼" ? "award-card featured" : "award-card"} award-style-${awardIndex % 4}`} key={award.title}>
+                  <span className="award-mark" style={{ color: award.players[0]?.color ?? "#7e8c85" }}>{award.mark}</span>
+                  <div className="award-copy"><small>{award.title}</small>{award.players.length ? <div className="award-winners">{award.players.map((player) => <span key={player.id}><i style={{ background: player.color }}>{playerAvatar(player)}</i>{player.name}</span>)}</div> : <strong>尚無資料</strong>}<p>{award.hint}{award.players.length > 1 ? ` · ${award.players.length} 人並列` : ""}</p></div>
                   <b>{award.value}</b>
                 </article>)}</div>
               </section>
