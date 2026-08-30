@@ -139,6 +139,24 @@ button { transition: transform .16s ease, background-color .16s ease, border-col
 .fund-summary article > small { color: #98a19c; font-size: 8px; }
 .fund-summary .fund-balance { color: white; background: #173d30; border-color: #173d30; }
 .fund-summary .fund-balance > span, .fund-summary .fund-balance > small { color: rgba(255,255,255,.6); }
+.shareholder-panel { padding: 24px; background: #fffdf8; border-bottom: 1px solid var(--line); }
+.shareholder-title { margin-bottom: 20px; display: flex; align-items: end; justify-content: space-between; gap: 16px; }
+.shareholder-title span { display: block; margin-bottom: 5px; color: var(--green); font: 8px/1 monospace; letter-spacing: .16em; }
+.shareholder-title h3 { margin: 0; font: 800 18px/1.2 "Noto Serif TC", serif; }
+.shareholder-title > small { color: var(--muted); font-size: 9px; }
+.shareholder-chart { display: grid; grid-template-columns: minmax(210px, .7fr) minmax(320px, 1.3fr); align-items: center; gap: 30px; }
+.shareholder-pie { width: min(245px, 100%); aspect-ratio: 1; margin: auto; display: grid; place-items: center; position: relative; border: 8px solid white; border-radius: 50%; box-shadow: 0 9px 24px rgba(20,59,44,.13), 0 0 0 1px #dce5df; }
+.shareholder-pie::after { width: 53%; aspect-ratio: 1; content: ""; position: absolute; background: #fffdf8; border: 1px solid rgba(20,59,44,.08); border-radius: 50%; box-shadow: 0 4px 14px rgba(20,59,44,.08); }
+.shareholder-pie > div { z-index: 1; display: flex; position: relative; align-items: center; flex-direction: column; gap: 5px; }
+.shareholder-pie strong { color: var(--ink); font: 900 18px/1 monospace; }
+.shareholder-pie span { color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .08em; }
+.shareholder-legend { display: grid; gap: 8px; }
+.shareholder-legend > div { min-height: 48px; padding: 6px 10px; display: grid; grid-template-columns: 28px 34px minmax(80px, 1fr) 92px 58px; align-items: center; gap: 9px; background: white; border: 1px solid #e2e8e3; border-radius: 6px; box-shadow: 0 2px 0 rgba(20,59,44,.025); }
+.shareholder-rank { color: #98a39d; font: 700 9px/1 monospace; }
+.shareholder-legend i { width: 30px; height: 30px; display: grid; place-items: center; color: white; border-radius: 50%; font: 900 9px/1 sans-serif; }
+.shareholder-legend strong { overflow: hidden; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+.shareholder-legend small { color: var(--muted); font: 700 10px/1 monospace; text-align: right; }
+.shareholder-legend b { color: var(--green); font: 900 11px/1 monospace; text-align: right; }
 .expense-history { padding: 22px 24px 24px; }
 .adjustment-history { padding-top: 0; }
 .expense-title { margin-bottom: 12px; display: flex; align-items: end; justify-content: space-between; gap: 16px; }
@@ -403,6 +421,8 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
   .player-card-grid { grid-template-columns: 1fr; }
   .fund-head { align-items: flex-start; flex-direction: column; }
   .fund-actions { width: 100%; justify-content: flex-start; }
+  .shareholder-chart { grid-template-columns: 1fr; gap: 22px; }
+  .shareholder-pie { width: 220px; }
   .mobile-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; height: 72px; display: grid; grid-template-columns: repeat(4, 1fr); background: rgba(255,255,255,.96); border-top: 1px solid #d2d8d3; box-shadow: 0 -8px 24px rgba(14,43,32,.08); backdrop-filter: blur(12px); }
   .mobile-nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #829088; background: transparent; border: 0; font-size: 9px; }
   .mobile-nav button.active { color: var(--green); font-weight: 800; }
@@ -493,6 +513,13 @@ input:focus, select:focus { border-color: var(--green) !important; box-shadow: 0
   .fund-summary article { min-height: 98px; padding: 12px; }
   .fund-summary article > strong { font-size: 18px; }
   .fund-summary .fund-balance { grid-column: 1 / -1; }
+  .shareholder-panel { padding: 18px; }
+  .shareholder-title { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .shareholder-pie { width: 200px; }
+  .shareholder-legend > div { padding-inline: 7px; grid-template-columns: 23px 30px minmax(58px, 1fr) 70px 48px; gap: 6px; }
+  .shareholder-legend i { width: 28px; height: 28px; }
+  .shareholder-legend small { font-size: 9px; }
+  .shareholder-legend b { font-size: 10px; }
   .expense-history { padding: 18px; }
   .expense-title { align-items: flex-start; flex-direction: column; gap: 5px; }
   .expense-list > div { min-height: 66px; grid-template-columns: 70px minmax(0, 1fr) 74px 34px; grid-template-rows: 22px 22px; gap: 3px 7px; }

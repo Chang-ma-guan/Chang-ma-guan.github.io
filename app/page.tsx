@@ -530,7 +530,7 @@ export default function Home() {
           ) : view === "players" ? (
             <PlayersView stats={stats} maxBar={maxBar} onManage={() => setPlayersOpen(true)} />
           ) : (
-            <FundPanel season={season} currentSeason={data.currentSeason} openingBalance={data.openingBalance} income={fundIncome} spending={fundSpending} adjustment={fundAdjustment} balance={fundBalance} allTimeBalance={allTimeFundBalance} expenses={filteredExpenses} adjustments={filteredAdjustments} onChangeSeason={() => setSeasonOpen(true)} onAddExpense={() => setExpenseOpen(true)} onOpenFundTools={() => setFundToolsOpen(true)} onDeleteExpense={removeExpense} onDeleteAdjustment={removeAdjustment} />
+            <FundPanel season={season} currentSeason={data.currentSeason} openingBalance={data.openingBalance} income={fundIncome} spending={fundSpending} adjustment={fundAdjustment} balance={fundBalance} allTimeBalance={allTimeFundBalance} stats={stats} expenses={filteredExpenses} adjustments={filteredAdjustments} onChangeSeason={() => setSeasonOpen(true)} onAddExpense={() => setExpenseOpen(true)} onOpenFundTools={() => setFundToolsOpen(true)} onDeleteExpense={removeExpense} onDeleteAdjustment={removeAdjustment} />
           )}
         </div>
       </section>
@@ -664,7 +664,7 @@ function PlayersView({ stats, maxBar, onManage }: { stats: PlayerStats[]; maxBar
   </>;
 }
 
-function FundPanel({ season, currentSeason, openingBalance, income, spending, adjustment, balance, allTimeBalance, expenses, adjustments, onChangeSeason, onAddExpense, onOpenFundTools, onDeleteExpense, onDeleteAdjustment }: {
+function FundPanel({ season, currentSeason, openingBalance, income, spending, adjustment, balance, allTimeBalance, stats, expenses, adjustments, onChangeSeason, onAddExpense, onOpenFundTools, onDeleteExpense, onDeleteAdjustment }: {
   season: string;
   currentSeason: string;
   openingBalance: number;
@@ -673,6 +673,7 @@ function FundPanel({ season, currentSeason, openingBalance, income, spending, ad
   adjustment: number;
   balance: number;
   allTimeBalance: number;
+  stats: PlayerStats[];
   expenses: FundExpense[];
   adjustments: FundAdjustment[];
   onChangeSeason: () => void;
@@ -682,6 +683,16 @@ function FundPanel({ season, currentSeason, openingBalance, income, spending, ad
   onDeleteAdjustment: (adjustment: FundAdjustment) => Promise<void>;
 }) {
   const periodName = season === "全部賽季" ? "全部賽季" : season;
+  const shareholders = [...stats].filter((row) => row.grossLoss > 0).sort((a, b) => b.grossLoss - a.grossLoss);
+  const shareholderTotal = shareholders.reduce((sum, row) => sum + row.grossLoss, 0);
+  let completedShare = 0;
+  const shareholderPie = shareholders.length
+    ? `conic-gradient(${shareholders.map((row) => {
+        const start = completedShare;
+        completedShare += row.grossLoss / shareholderTotal * 100;
+        return `${row.player.color} ${start}% ${completedShare}%`;
+      }).join(", ")})`
+    : "#e4e9e5";
   return <section className="fund-panel" aria-label="張家麻將基金">
     <header className="fund-head"><div><span>CHANG FAMILY FUND</span><h2>張家麻將基金</h2><p>輸家繳入、贏家不領，旅遊支出直接從基金扣除。</p></div><div className="fund-actions"><button type="button" onClick={onChangeSeason}>換季</button><button type="button" onClick={onOpenFundTools}>對帳／調整</button><button className="fund-add" type="button" onClick={onAddExpense}>＋ 記旅遊支出</button></div></header>
     <div className="fund-summary">
@@ -691,6 +702,19 @@ function FundPanel({ season, currentSeason, openingBalance, income, spending, ad
       <article><span>{periodName}帳務調整</span><strong className={adjustment >= 0 ? "money-up" : "money-down"}>{formatMoney(adjustment)}</strong><small>補入或扣除的差額</small></article>
       <article><span>{periodName}結餘</span><strong className={balance >= 0 ? "money-up" : "money-down"}>{formatMoney(balance)}</strong><small>收入扣除支出</small></article>
       <article className="fund-balance"><span>基金目前總餘額</span><strong className={allTimeBalance >= 0 ? "money-up" : "money-down"}>{formatMoney(allTimeBalance)}</strong><small>全部賽季累計</small></article>
+    </div>
+    <div className="shareholder-panel">
+      <div className="shareholder-title"><div><span>FUND SHAREHOLDERS</span><h3>股東圓餅圖</h3></div><small>{periodName}・依每個人輸錢總額計算</small></div>
+      {shareholders.length ? <div className="shareholder-chart">
+        <div className="shareholder-pie" style={{ background: shareholderPie }} role="img" aria-label={`${periodName}股東投入比例`}><div><strong>{formatMoney(shareholderTotal, false)}</strong><span>股東總投入</span></div></div>
+        <div className="shareholder-legend">{shareholders.map((row, index) => <div key={row.player.id}>
+          <span className="shareholder-rank">{String(index + 1).padStart(2, "0")}</span>
+          <i style={{ background: row.player.color }}>{playerAvatar(row.player)}</i>
+          <strong>{row.player.name}</strong>
+          <small>{formatMoney(row.grossLoss, false)}</small>
+          <b>{(row.grossLoss / shareholderTotal * 100).toFixed(1)}%</b>
+        </div>)}</div>
+      </div> : <p className="expense-empty">目前還沒有輸錢紀錄，記下對局後就會顯示股東占比。</p>}
     </div>
     <div className="expense-history"><div className="expense-title"><div><span>TRAVEL EXPENSES</span><h3>旅遊支出紀錄</h3></div><small>目前賽季：{currentSeason}</small></div>
       {expenses.length ? <div className="expense-list">{expenses.slice(0, 8).map((expense) => <div key={expense.id}><time>{formatDate(expense.spentAt)}</time><span className="expense-season">{expense.season}</span><strong>{expense.note || "旅遊支出"}</strong><b>-${expense.amount.toLocaleString("zh-TW")}</b><button type="button" onClick={() => void onDeleteExpense(expense)}>刪除</button></div>)}</div> : <p className="expense-empty">這個統計區間還沒有旅遊支出。</p>}
