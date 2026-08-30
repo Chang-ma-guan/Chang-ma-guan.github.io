@@ -685,13 +685,13 @@ function FundPanel({ season, currentSeason, openingBalance, income, spending, ad
   const periodName = season === "全部賽季" ? "全部賽季" : season;
   const shareholders = [...stats].filter((row) => row.grossLoss > 0).sort((a, b) => b.grossLoss - a.grossLoss);
   const shareholderTotal = shareholders.reduce((sum, row) => sum + row.grossLoss, 0);
-  let completedShare = 0;
-  const shareholderPie = shareholders.length
-    ? `conic-gradient(${shareholders.map((row) => {
-        const start = completedShare;
-        completedShare += row.grossLoss / shareholderTotal * 100;
-        return `${row.player.color} ${start}% ${completedShare}%`;
-      }).join(", ")})`
+  const shareholderSlices = shareholders.map((row, index) => {
+    const start = shareholders.slice(0, index).reduce((sum, item) => sum + item.grossLoss, 0) / shareholderTotal * 100;
+    const share = row.grossLoss / shareholderTotal * 100;
+    return { row, start, end: start + share, share };
+  });
+  const shareholderPie = shareholderSlices.length
+    ? `conic-gradient(${shareholderSlices.map(({ row, start, end }) => `${row.player.color} ${start}% ${end}%`).join(", ")})`
     : "#e4e9e5";
   return <section className="fund-panel" aria-label="張家麻將基金">
     <header className="fund-head"><div><span>CHANG FAMILY FUND</span><h2>張家麻將基金</h2><p>輸家繳入、贏家不領，旅遊支出直接從基金扣除。</p></div><div className="fund-actions"><button type="button" onClick={onChangeSeason}>換季</button><button type="button" onClick={onOpenFundTools}>對帳／調整</button><button className="fund-add" type="button" onClick={onAddExpense}>＋ 記旅遊支出</button></div></header>
@@ -706,7 +706,15 @@ function FundPanel({ season, currentSeason, openingBalance, income, spending, ad
     <div className="shareholder-panel">
       <div className="shareholder-title"><div><span>FUND SHAREHOLDERS</span><h3>股東圓餅圖</h3></div><small>{periodName}・依每個人輸錢總額計算</small></div>
       {shareholders.length ? <div className="shareholder-chart">
-        <div className="shareholder-pie" style={{ background: shareholderPie }} role="img" aria-label={`${periodName}股東投入比例`}><div><strong>{formatMoney(shareholderTotal, false)}</strong><span>股東總投入</span></div></div>
+        <div className="shareholder-pie" style={{ background: shareholderPie }} role="img" aria-label={`${periodName}股東投入比例`}>
+          {shareholderSlices.map(({ row, start, end, share }) => {
+            const angle = (start + end) / 2 * 3.6 - 90;
+            const radius = share < 7 ? 43 : 39;
+            const radians = angle * Math.PI / 180;
+            return <span className="shareholder-pie-label" style={{ left: `${50 + Math.cos(radians) * radius}%`, top: `${50 + Math.sin(radians) * radius}%` }} key={row.player.id}>{row.player.name}</span>;
+          })}
+          <div><strong>{formatMoney(shareholderTotal, false)}</strong><span>股東總投入</span></div>
+        </div>
         <div className="shareholder-legend">{shareholders.map((row, index) => <div key={row.player.id}>
           <span className="shareholder-rank">{String(index + 1).padStart(2, "0")}</span>
           <i style={{ background: row.player.color }}>{playerAvatar(row.player)}</i>
